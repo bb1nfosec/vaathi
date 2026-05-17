@@ -18,6 +18,8 @@ import {
   Shield,
   BookOpen,
   Sparkles,
+  Clock,
+  Key,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -37,6 +39,10 @@ export default function Dashboard() {
   const totalCTFs = user.completedCTFs.length
   const completedTopics = roadmapTopics.filter((t) => t.status === 'completed').length
   const nextAvailableTopic = roadmapTopics.find((t) => t.status === 'available')
+
+  // Check if enough time has passed for a quick check-in (24h)
+  const lastActiveDate = user.id ? new Date() : new Date()
+  const showCheckIn = false // placeholder — can be enhanced with lastActive tracking
 
   // Parse topic progress
   let topicProgress: Record<string, number> = {}
@@ -60,8 +66,14 @@ export default function Dashboard() {
             Welcome back, <span className="text-neon">{user.name}</span>!
           </h1>
           <p className="text-muted-foreground">
-            {user.streak > 1 ? `🔥 ${user.streak} day streak! Don&apos;t break the chain!` : 'Ready to learn some cybersecurity today?'}
+            {user.streak > 1 ? `🔥 ${user.streak} day streak! Don&apos;t break the chain!` : 'Ready to hack some knowledge today?'}
           </p>
+          <div className="flex items-center gap-2 mt-1">
+            <Key className="w-3 h-3 text-muted-foreground/50" />
+            <p className="text-[11px] text-muted-foreground/60">
+              Powered by your {user.llmProvider} key — Vaathi is just the wrapper 🛡️
+            </p>
+          </div>
         </motion.div>
 
         {/* Stats Cards */}
@@ -188,8 +200,9 @@ export default function Dashboard() {
                         <div className="flex-1">
                           <p className="text-sm font-semibold text-neon mb-1">Start Your Skill Assessment</p>
                           <p className="text-xs text-muted-foreground mb-3">
-                            I&apos;ll ask you nerdy questions about networking, Linux, web security, crypto and more. 
-                            Based on how you explain things, I&apos;ll create a personalized learning roadmap just for you.
+                            I&apos;ll ask nerdy cybersecurity questions — networking, Linux, web security, crypto. 
+                            Explain what you know in your own words (no MCQs!). Based on your depth, I&apos;ll build 
+                            a personalized learning roadmap with micro-tasks, quizzes, and AI-guided practice.
                           </p>
                           <Button onClick={() => setView('assessment')} className="gap-2 bg-neon text-cyber-dark hover:bg-neon/90 text-xs">
                             <Sparkles className="w-3.5 h-3.5" /> Start Assessment

@@ -81,7 +81,7 @@ export default function LandingPage() {
             className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-10"
           >
             Bring Your Own LLM. Learn cybersecurity with an AI mentor that speaks your language.
-            From zero to ethical hacker — on your machine, at your pace.
+            No servers. No subscriptions. Just your API key and Vaathi as the wrapper.
           </motion.p>
 
           <motion.div
@@ -112,7 +112,7 @@ export default function LandingPage() {
               { value: '6', label: 'Languages' },
               { value: '5+', label: 'LLM Providers' },
               { value: '5', label: 'Skill Tiers' },
-              { value: '∞', label: 'AI-Generated Labs' },
+              { value: '∞', label: 'Micro Tasks' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <div className="text-2xl sm:text-3xl font-bold text-neon">{stat.value}</div>
@@ -150,8 +150,8 @@ export default function LandingPage() {
               },
               {
                 icon: Swords,
-                title: 'Dynamic Labs',
-                desc: 'AI generates unique lab scenarios with step-by-step instructions, commands, and real-world context.',
+                title: 'Micro Tasks',
+                desc: 'Tiny hands-on exercises — code analysis, decode challenges, command drills, log forensics. No VMs needed.',
                 color: '#06b6d4',
               },
               {

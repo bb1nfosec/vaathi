@@ -52,6 +52,24 @@ export interface UserData {
   completedCTFs: Array<{ id: string; challengeTitle: string; category: string; difficulty: string; pointsEarned: number; completedAt: string }>
 }
 
+export interface MicroTaskData {
+  type: string
+  title: string
+  description: string
+  content: string
+  hint: string
+  expectedAnswer: string
+  explanation: string
+  xpReward: number
+}
+
+export interface TaskEvaluation {
+  correct: boolean
+  score: string
+  feedback: string
+  explanation: string
+}
+
 export interface RoadmapTopicData {
   id: string
   title: string
@@ -93,6 +111,14 @@ interface VaathiState {
   topicQuiz: Array<{ question: string; options: string[]; correctIndex: number; explanation: string }> | null
   topicLoading: boolean
 
+  // Micro-tasks
+  currentMicroTask: MicroTaskData | null
+  microTaskLoading: boolean
+  microTaskAnswer: string
+  microTaskEvaluation: TaskEvaluation | null
+  microTaskEvaluating: boolean
+  microTasksCompleted: number
+
   // Navigation
   setView: (view: ViewType) => void
 
@@ -111,6 +137,12 @@ interface VaathiState {
   loadTopicExplanation: (topicId: string) => Promise<void>
   loadTopicQuiz: (topicId: string) => Promise<void>
   completeTopic: (topicId: string) => Promise<void>
+
+  // Micro-tasks
+  loadMicroTask: (topicId: string) => Promise<void>
+  evaluateMicroTask: (topicId: string) => Promise<void>
+  setMicroTaskAnswer: (answer: string) => void
+  clearMicroTask: () => void
 
   // Chat (Guru)
   sendMessage: (content: string) => Promise<void>
@@ -153,6 +185,14 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
   topicExplanation: '',
   topicQuiz: null,
   topicLoading: false,
+
+  // Micro-tasks
+  currentMicroTask: null,
+  microTaskLoading: false,
+  microTaskAnswer: '',
+  microTaskEvaluation: null,
+  microTaskEvaluating: false,
+  microTasksCompleted: 0,
 
   setView: (view) => set({ currentView: view }),
 
@@ -413,6 +453,63 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
       // ignore
     }
   },
+
+  // Micro-task: generate a new micro-task
+  loadMicroTask: async (topicId) => {
+    const { userId } = get()
+    if (!userId) return
+    set({ microTaskLoading: true, currentMicroTask: null, microTaskEvaluation: null, microTaskAnswer: '' })
+    try {
+      const res = await fetch('/api/topic-learn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, topicId, action: 'microtask' }),
+      })
+      const data = await res.json()
+      if (data.microtask) {
+        set({ currentMicroTask: data.microtask })
+      }
+    } catch {
+      set({ currentMicroTask: null })
+    } finally {
+      set({ microTaskLoading: false })
+    }
+  },
+
+  // Micro-task: evaluate student answer
+  evaluateMicroTask: async (topicId) => {
+    const { userId, currentMicroTask, microTaskAnswer } = get()
+    if (!userId || !currentMicroTask || !microTaskAnswer.trim()) return
+    set({ microTaskEvaluating: true, microTaskEvaluation: null })
+    try {
+      const res = await fetch('/api/topic-learn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId, topicId, action: 'evaluate-task',
+          taskType: currentMicroTask.type,
+          taskTitle: currentMicroTask.title,
+          taskContent: currentMicroTask.content,
+          expectedAnswer: currentMicroTask.expectedAnswer,
+          studentAnswer: microTaskAnswer,
+        }),
+      })
+      const data = await res.json()
+      if (data.evaluation) {
+        set({ microTaskEvaluation: data.evaluation })
+        if (data.evaluation.correct) {
+          set((s) => ({ microTasksCompleted: s.microTasksCompleted + 1 }))
+        }
+      }
+    } catch {
+      set({ microTaskEvaluation: { correct: false, score: 'wrong', feedback: 'Failed to evaluate. Try again.', explanation: '' } })
+    } finally {
+      set({ microTaskEvaluating: false })
+    }
+  },
+
+  setMicroTaskAnswer: (answer) => set({ microTaskAnswer: answer }),
+  clearMicroTask: () => set({ currentMicroTask: null, microTaskAnswer: '', microTaskEvaluation: null }),
 
   saveProfile: async (data) => {
     const { userId } = get()
@@ -688,7 +785,7 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
 }))
 
 // Parse lab/CTF JSON from AI response
-function parseStructuredContent(content: string, set: (fn: (s: VaathiState) => Partial<VaathiState>) => void, get: () => VaathiState) {
+function parseStructuredContent(content: string, set: (partial: Partial<VaathiState>) => void, get: () => VaathiState) {
   // Try to find JSON blocks
   const jsonBlockRegex = /```json\s*\n?([\s\S]*?)\n?```/g
   let match

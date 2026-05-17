@@ -171,6 +171,160 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ explanation, cached: false })
     }
 
+    // Action: microtask - generate a tiny hands-on exercise
+    if (action === 'microtask') {
+      if (!user.llmApiKey) {
+        return NextResponse.json({ error: 'NO_API_KEY', message: 'Set up your LLM API key first.' }, { status: 200 })
+      }
+
+      const baseUrl = user.llmProvider === 'custom' && user.llmBaseUrl
+        ? user.llmBaseUrl.replace(/\/+$/, '')
+        : (PROVIDER_URLS[user.llmProvider] || PROVIDER_URLS.groq)
+
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.llmApiKey}`,
+        },
+        body: JSON.stringify({
+          model: user.llmModel,
+          messages: [
+            {
+              role: 'system',
+              content: `You are Vaathi Guru, a cybersecurity tutor generating tiny hands-on practice exercises (micro-tasks). These are exercises a student can do right in their browser or terminal — NO VMs or Docker needed.
+
+Generate ONE micro-task based on the topic. Pick a random type from these:
+
+1. **code-analysis**: Show a short code snippet (5-15 lines) with a vulnerability or security issue. Student must identify and explain it.
+2. **command-challenge**: Show a cybersecurity command (nmap, tcpdump, netstat, etc.). Student must explain what it does and what output to expect.
+3. **decode-encode**: Give a Base64/Hex/ROT13/Binary encoded string. Student must decode it to find a flag or hidden message.
+4. **scenario-response**: Describe a realistic security scenario (incident, alert, suspicious activity). Student must explain what they'd do step by step.
+5. **log-analysis**: Show a small log excerpt (web server, firewall, auth logs). Student must find the attack or anomaly.
+6. **concept-explain**: Ask the student to explain a concept in their own words like they're teaching a beginner — tests deep understanding.
+
+Rules:
+- Make it SHORT and FOCUSED — student should finish in 2-5 minutes
+- Difficulty should match: ${topic.difficulty}
+- Use real-world examples from Indian cybersecurity context when possible
+- The task should be FUN and engaging, not boring textbook stuff
+- Include the answer/hint in the JSON so we can evaluate later
+- Speak in ${user.language}
+
+Output ONLY valid JSON, nothing else:
+{
+  "type": "code-analysis|command-challenge|decode-encode|scenario-response|log-analysis|concept-explain",
+  "title": "Short catchy title for this task",
+  "description": "1-2 sentence description of what the student needs to do",
+  "content": "The actual content — code snippet, command, encoded string, log, or scenario text. Use \\n for newlines in code blocks.",
+  "hint": "A helpful hint if the student gets stuck",
+  "expectedAnswer": "What a correct answer looks like (used for AI evaluation — key points to check)",
+  "explanation": "Full explanation of the answer — shown after student submits",
+  "xpReward": 25
+}`,
+            },
+            { role: 'user', content: `Generate a micro-task for topic: "${topic.title}". ${topic.description ? `Focus: ${topic.description}` : ''}` },
+          ],
+          temperature: 0.9,
+          max_tokens: 2000,
+        }),
+      })
+
+      if (!response.ok) {
+        return NextResponse.json({ error: 'LLM_ERROR', message: 'Failed to generate task.' }, { status: 200 })
+      }
+
+      const data = await response.json()
+      let taskContent = data.choices?.[0]?.message?.content || ''
+
+      // Extract JSON
+      const jsonMatch = taskContent.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        return NextResponse.json({ error: 'PARSE_ERROR', message: 'Failed to parse task.' }, { status: 200 })
+      }
+
+      let microtask
+      try {
+        microtask = JSON.parse(jsonMatch[0])
+      } catch {
+        return NextResponse.json({ error: 'PARSE_ERROR', message: 'Failed to parse task JSON.' }, { status: 200 })
+      }
+
+      return NextResponse.json({ microtask, cached: false })
+    }
+
+    // Action: evaluate-task - AI evaluates student's micro-task answer
+    if (action === 'evaluate-task') {
+      const { taskType, taskTitle, taskContent, expectedAnswer, studentAnswer } = body
+
+      if (!user.llmApiKey) {
+        return NextResponse.json({ error: 'NO_API_KEY', message: 'Set up your LLM API key first.' }, { status: 200 })
+      }
+
+      const baseUrl = user.llmProvider === 'custom' && user.llmBaseUrl
+        ? user.llmBaseUrl.replace(/\/+$/, '')
+        : (PROVIDER_URLS[user.llmProvider] || PROVIDER_URLS.groq)
+
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.llmApiKey}`,
+        },
+        body: JSON.stringify({
+          model: user.llmModel,
+          messages: [
+            {
+              role: 'system',
+              content: `You are Vaathi Guru evaluating a student's answer to a micro-task. Be encouraging but honest.
+
+Evaluate the student's answer against the expected answer. Check for:
+1. Did they identify the core concept correctly?
+2. Did they show understanding (not just keyword matching)?
+3. Is their explanation clear?
+
+For decode/encode tasks: check if the decoded result is correct.
+For code-analysis: check if they found the vulnerability.
+For command-challenge: check if they understand what the command does.
+For scenario/log-analysis: check if their response is reasonable.
+
+Respond in ${user.language}.
+
+Output ONLY valid JSON:
+{
+  "correct": true/false,
+  "score": "perfect|good|partial|wrong",
+  "feedback": "1-2 sentence feedback on their answer — be encouraging!",
+  "explanation": "Full explanation of the correct answer so they learn from it"
+}`,
+            },
+            { role: 'user', content: `Task type: ${taskType}\nTask title: ${taskTitle}\nTask content:\n${taskContent}\n\nExpected answer key points:\n${expectedAnswer}\n\nStudent's answer:\n${studentAnswer}` },
+          ],
+          temperature: 0.4,
+          max_tokens: 1000,
+        }),
+      })
+
+      if (!response.ok) {
+        return NextResponse.json({ error: 'LLM_ERROR', message: 'Failed to evaluate.' }, { status: 200 })
+      }
+
+      const data = await response.json()
+      let evalContent = data.choices?.[0]?.message?.content || ''
+
+      const jsonMatch = evalContent.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        return NextResponse.json({ evaluation: { correct: false, score: 'wrong', feedback: 'Could not evaluate. Try again.', explanation: '' } })
+      }
+
+      try {
+        const evaluation = JSON.parse(jsonMatch[0])
+        return NextResponse.json({ evaluation })
+      } catch {
+        return NextResponse.json({ evaluation: { correct: false, score: 'wrong', feedback: 'Evaluation error. Try again.', explanation: '' } })
+      }
+    }
+
     // Action: quiz - generate quiz using LLM
     if (action === 'quiz') {
       if (!user.llmApiKey) {
@@ -241,7 +395,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ quiz, cached: false })
     }
 
-    return NextResponse.json({ error: 'Unknown action. Use: start, explain, quiz, complete' }, { status: 400 })
+    return NextResponse.json({ error: 'Unknown action. Use: start, explain, quiz, microtask, evaluate-task, complete' }, { status: 400 })
   } catch (error) {
     console.error('Topic learn API error:', error)
     return NextResponse.json({ error: 'SERVER_ERROR', message: 'Something went wrong.' }, { status: 200 })
