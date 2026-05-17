@@ -1,7 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 
-// No singleton — create fresh client on every request in production
-// This avoids stale env var issues on Vercel serverless
+/**
+ * Create a PrismaClient — always reads env vars at call time.
+ * In production (Vercel serverless), the client is created fresh per request
+ * so env vars are guaranteed to be available.
+ * In development, we reuse a single client via globalThis.
+ */
 function createPrismaClient(): PrismaClient {
   const tursoAuthToken = process.env.TURSO_AUTH_TOKEN || ''
   const databaseUrl = process.env.DATABASE_URL || ''
@@ -26,16 +30,33 @@ function createPrismaClient(): PrismaClient {
   return new PrismaClient()
 }
 
-// In development, reuse the client to avoid too many connections
-// In production (Vercel), always create fresh to pick up env vars correctly
+// Dev-only singleton to avoid connection exhaustion during hot reloads
 const globalForDb = globalThis as unknown as { prisma: PrismaClient | undefined }
 
-export const db =
-  process.env.NODE_ENV === 'production'
-    ? createPrismaClient()
-    : (globalForDb.prisma ?? createPrismaClient())
-
-if (process.env.NODE_ENV !== 'production') globalForDb.prisma = db
+/**
+ * Lazy proxy — defers PrismaClient creation until first actual query.
+ * This guarantees process.env is fully populated on Vercel serverless.
+ */
+export const db = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    // In production (Vercel serverless): always create a fresh client per request
+    // to guarantee env vars are read at request-time, not module-load time.
+    // In development: reuse via globalThis to avoid connection exhaustion.
+    if (process.env.NODE_ENV === 'production') {
+      const client = createPrismaClient()
+      const value = Reflect.get(client, prop, receiver)
+      if (typeof value === 'function') return value.bind(client)
+      return value
+    }
+    if (!globalForDb.prisma) {
+      globalForDb.prisma = createPrismaClient()
+    }
+    const client = globalForDb.prisma
+    const value = Reflect.get(client, prop, receiver)
+    if (typeof value === 'function') return value.bind(client)
+    return value
+  },
+})
 
 // ── Auto-create tables (no prisma db push needed) ──────────────────────
 
