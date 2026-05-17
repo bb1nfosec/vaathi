@@ -38,11 +38,15 @@ export default function Arena() {
     setFlagInput('')
     setShowHint(null)
     await sendMessage('Generate a CTF challenge for me! Create a unique challenge with a flag.')
-    // The store will auto-parse the JSON and set currentCTF
-    // We wait a bit for the streaming to complete
+    // parseStructuredContent runs inside sendMessage after stream completes.
+    // Give it time to set currentCTF before stopping the spinner.
     setTimeout(() => {
       setIsGenerating(false)
-    }, 3000)
+      const ctf = useVaathiStore.getState().currentCTF
+      if (!ctf) {
+        setResult({ correct: false, message: 'CTF generation may have failed. Try asking Guru to create one in the chat!' })
+      }
+    }, 5000)
   }
 
   const handleSubmit = async () => {

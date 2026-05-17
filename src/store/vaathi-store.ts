@@ -791,24 +791,47 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
 
 // Parse lab/CTF JSON from AI response
 function parseStructuredContent(content: string, set: (partial: Partial<VaathiState>) => void, get: () => VaathiState) {
-  // Try to find JSON blocks
-  const jsonBlockRegex = /```json\s*\n?([\s\S]*?)\n?```/g
-  let match
-
-  while ((match = jsonBlockRegex.exec(content)) !== null) {
+  const tryParse = (jsonStr: string): boolean => {
     try {
-      const parsed = JSON.parse(match[1])
+      const parsed = JSON.parse(jsonStr)
       if (parsed.type === 'lab' && parsed.title && parsed.flag) {
         set({ currentLab: parsed as LabData, currentView: 'lab' })
-        return
+        return true
       }
       if (parsed.type === 'ctf' && parsed.title && parsed.flag) {
         set({ currentCTF: parsed as CTFData, currentView: 'arena' })
-        return
+        return true
       }
     } catch {
-      // Not valid JSON, continue
+      // Not valid JSON
     }
+    return false
+  }
+
+  // Method 1: ```json fenced code blocks
+  const fencedRegex = /```(?:json)?\s*\n?([\s\S]*?)\n?```/g
+  let match
+  while ((match = fencedRegex.exec(content)) !== null) {
+    if (tryParse(match[1])) return
+  }
+
+  // Method 2: Raw JSON with "type":"ctf" or "type":"lab"
+  const jsonPattern = /\{[^{}]*"type"\s*:\s*"(ctf|lab)"[^{}]*\}/g
+  while ((match = jsonPattern.exec(content)) !== null) {
+    if (tryParse(match[0])) return
+  }
+
+  // Method 3: Find outermost { ... } and try parsing
+  const firstBrace = content.indexOf('{')
+  const lastBrace = content.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    if (tryParse(content.slice(firstBrace, lastBrace + 1))) return
+  }
+
+  // Method 4: Any ``` fenced block (without 'json' label)
+  const tickRegex = /```\s*\n?([\s\S]*?)\n?```/g
+  while ((match = tickRegex.exec(content)) !== null) {
+    if (tryParse(match[1])) return
   }
 }
 
