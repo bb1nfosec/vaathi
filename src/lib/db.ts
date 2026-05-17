@@ -18,11 +18,15 @@ function createPrismaClient(): PrismaClient {
   const tursoAuthToken = getEnv('TURSO_AUTH_TOKEN')
   const databaseUrl = getEnv('DATABASE_URL')
 
-  console.error('[db] createPrismaClient called:', {
-    NODE_ENV: getEnv('NODE_ENV'),
-    hasToken: !!tursoAuthToken,
-    url: databaseUrl ? databaseUrl.substring(0, 40) + '...' : 'EMPTY',
-  })
+  console.error('[db] createPrismaClient — hasToken:', !!tursoAuthToken, 'url:', databaseUrl ? databaseUrl.substring(0, 40) + '...' : 'EMPTY')
+
+  // IMPORTANT: Explicitly set process.env['DATABASE_URL'] at runtime.
+  // Turbopack bakes process.env.DATABASE_URL as the literal "undefined" at build time
+  // into Prisma's generated constructor. By re-assigning it here before PrismaClient()
+  // is instantiated, Prisma's internal env read gets the real runtime value.
+  if (databaseUrl) {
+    process.env['DATABASE_URL'] = databaseUrl
+  }
 
   // Turso mode: need BOTH token and libsql:// URL
   if (tursoAuthToken.length > 0 && databaseUrl.startsWith('libsql://')) {
@@ -32,25 +36,22 @@ function createPrismaClient(): PrismaClient {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { createClient } = require('@libsql/client')
 
-      console.error('[db] Loading libSQL adapter...')
-
       const libsql = createClient({
         url: databaseUrl,
         authToken: tursoAuthToken,
       })
 
       const adapter = new PrismaLibSQL(libsql)
-      const client = new PrismaClient({ adapter })
-      console.error('[db] Prisma client created with libSQL adapter')
-      return client
+      return new PrismaClient({ adapter })
     } catch (adapterErr: unknown) {
       const msg = adapterErr instanceof Error ? adapterErr.message : String(adapterErr)
-      console.error('[db] libSQL adapter failed, falling back:', msg)
+      console.error('[db] libSQL adapter failed:', msg)
+      // DON'T silently fall back to SQLite — if Turso is configured, adapter MUST work
+      throw new Error(`Turso adapter failed: ${msg}. Ensure @prisma/adapter-libsql and @libsql/client are installed.`)
     }
   }
 
-  // SQLite fallback — also use bracket notation to avoid build-time replacement
-  console.error('[db] Using SQLite fallback (no adapter)')
+  // SQLite fallback (local dev)
   return new PrismaClient({
     datasources: {
       db: {
