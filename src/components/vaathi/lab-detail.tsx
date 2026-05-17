@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useVaathiStore } from '@/store/vaathi-store'
 import { labs, difficultyColors } from '@/lib/vaathi-data'
@@ -26,37 +26,29 @@ import {
 } from 'lucide-react'
 
 export default function LabDetail() {
-  const { selectedLab, goBack, completeLab, useHint, user, labProgress, updateLabStep } = useVaathiStore()
+  const { selectedLab, goBack, completeLab, spendHint, user, labProgress, updateLabStep } = useVaathiStore()
   const [flagInput, setFlagInput] = useState('')
   const [flagCorrect, setFlagCorrect] = useState(false)
   const [flagWrong, setFlagWrong] = useState(false)
   const [showHint, setShowHint] = useState(false)
   const [currentHint, setCurrentHint] = useState(0)
-  const [currentStep, setCurrentStep] = useState(0)
+  const [localStep, setLocalStep] = useState(0)
   const [labComplete, setLabComplete] = useState(false)
-  const [terminalLines, setTerminalLines] = useState<string[]>([])
   const [showDebrief, setShowDebrief] = useState(false)
 
   const lab = labs.find((l) => l.id === selectedLab)
 
-  useEffect(() => {
-    if (lab) {
-      const progress = labProgress[lab.id]
-      if (progress) {
-        setCurrentStep(progress.currentStep)
-        setCurrentHint(progress.hintsUsed)
-      }
-    }
-  }, [lab, labProgress])
+  // Derive currentStep from store progress (initializes from store, updates via buttons)
+  const currentStep = lab && labProgress[lab.id] ? labProgress[lab.id].currentStep : localStep
+  const hintCount = lab && labProgress[lab.id] ? labProgress[lab.id].hintsUsed : currentHint
 
-  useEffect(() => {
-    if (lab && currentStep > 0) {
-      const newLines = lab.steps.slice(0, currentStep).map((step, i) => ({
-        text: `$ guru: ${step}`,
-        color: i === currentStep - 1 ? 'text-neon' : 'text-foreground/60',
-      }))
-      setTerminalLines(newLines.map((l) => l.text))
-    }
+  // Compute terminal lines from currentStep (no useEffect needed)
+  const terminalLines = useMemo(() => {
+    if (!lab || currentStep <= 0) return []
+    return lab.steps.slice(0, currentStep + 1).map((step, i) => ({
+      text: step,
+      isActive: i === currentStep,
+    }))
   }, [lab, currentStep])
 
   if (!lab) {
@@ -67,14 +59,13 @@ export default function LabDetail() {
     )
   }
 
-  const progress = lab ? (currentStep / lab.steps.length) * 100 : 0
+  const progress = (currentStep / lab.steps.length) * 100
   const isCompleted = user.completedLabs.includes(lab.id)
-  const currentStepData = lab.steps[currentStep]
 
   const handleNextStep = () => {
     if (currentStep < lab.steps.length - 1) {
       const nextStep = currentStep + 1
-      setCurrentStep(nextStep)
+      setLocalStep(nextStep)
       updateLabStep(lab.id, nextStep)
       setShowHint(false)
       setFlagWrong(false)
@@ -83,17 +74,18 @@ export default function LabDetail() {
 
   const handlePrevStep = () => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1)
+      const prevStep = currentStep - 1
+      setLocalStep(prevStep)
       setShowHint(false)
       setFlagWrong(false)
     }
   }
 
   const handleHint = () => {
-    if (currentHint < lab.hints.length) {
+    if (hintCount < lab.hints.length) {
       setShowHint(true)
-      setCurrentHint(currentHint + 1)
-      useHint(lab.id)
+      setCurrentHint(hintCount + 1)
+      spendHint(lab.id)
     }
   }
 
@@ -208,22 +200,22 @@ export default function LabDetail() {
 
                     {/* Steps */}
                     <AnimatePresence>
-                      {lab.steps.slice(0, currentStep + 1).map((step, i) => (
+                      {terminalLines.map((step, i) => (
                         <motion.div
                           key={i}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 0.1 }}
                         >
-                          <div className={`flex items-start gap-2 ${i === currentStep ? 'text-neon' : 'text-foreground/50'}`}>
+                          <div className={`flex items-start gap-2 ${step.isActive ? 'text-neon' : 'text-foreground/50'}`}>
                             <span className="text-neon/60 shrink-0">
-                              {i === currentStep ? '>' : '✓'}
+                              {step.isActive ? '>' : '✓'}
                             </span>
-                            <span className={i === currentStep ? '' : 'line-through'}>
-                              {step}
+                            <span className={step.isActive ? '' : 'line-through'}>
+                              {step.text}
                             </span>
                           </div>
-                          {i < currentStep && <div className="h-1" />}
+                          {!step.isActive && <div className="h-1" />}
                         </motion.div>
                       ))}
                     </AnimatePresence>
@@ -280,7 +272,7 @@ export default function LabDetail() {
               <Button
                 variant="outline"
                 onClick={handleHint}
-                disabled={currentHint >= lab.hints.length}
+                disabled={hintCount >= lab.hints.length}
                 className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 gap-2"
               >
                 <Lightbulb className="w-4 h-4" />
@@ -326,7 +318,7 @@ export default function LabDetail() {
 
                 {/* Hint Display */}
                 <AnimatePresence>
-                  {showHint && currentHint > 0 && lab.hints[currentHint - 1] && (
+                  {showHint && hintCount > 0 && lab.hints[hintCount - 1] && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
@@ -335,9 +327,9 @@ export default function LabDetail() {
                     >
                       <div className="flex items-center gap-2 text-xs text-amber-400 mb-1">
                         <Lightbulb className="w-3 h-3" />
-                        Hint {currentHint}
+                        Hint {hintCount}
                       </div>
-                      <p className="text-xs text-foreground/80">{lab.hints[currentHint - 1]}</p>
+                      <p className="text-xs text-foreground/80">{lab.hints[hintCount - 1]}</p>
                     </motion.div>
                   )}
                 </AnimatePresence>

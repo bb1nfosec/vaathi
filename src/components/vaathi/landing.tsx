@@ -29,7 +29,7 @@ import {
   MessageSquare,
   BookOpen,
   Terminal,
-  Containers,
+  Container,
   Cpu,
   Database,
   Key,
@@ -400,7 +400,7 @@ export default function LandingPage() {
           <div className="grid sm:grid-cols-2 gap-6">
             {[
               {
-                icon: Containers,
+                icon: Container,
                 title: 'Docker Containers',
                 desc: 'Labs run locally via Docker containers pulled once. No constant internet needed.',
               },

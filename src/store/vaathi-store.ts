@@ -64,7 +64,7 @@ interface VaathiState {
   addGuruMessage: (content: string) => void
   selectLab: (labId: string | null) => void
   updateLabStep: (labId: string, step: number) => void
-  useHint: (labId: string) => void
+  spendHint: (labId: string) => void
   setChatLanguage: (lang: 'english' | 'hindi' | 'tamil') => void
   setTier: (tier: TierType) => void
 }
@@ -258,7 +258,7 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
       },
     })),
 
-  useHint: (labId) =>
+  spendHint: (labId) =>
     set((s) => ({
       labProgress: {
         ...s.labProgress,
