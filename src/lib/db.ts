@@ -33,20 +33,15 @@ function createPrismaClient(): PrismaClient {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { PrismaLibSQL } = require('@prisma/adapter-libsql')
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { createClient } = require('@libsql/client')
 
-      const libsql = createClient({
+      // CRITICAL: Pass a CONFIG OBJECT to PrismaLibSQL, NOT a pre-created client.
+      // PrismaLibSQL is a FACTORY — its connect() calls createClient(this.#config).
+      // If we pass a client instance, @libsql/client sees no .url property,
+      // falls back to process.env.DATABASE_URL → Turbopack baked "undefined" → error!
+      const adapter = new PrismaLibSQL({
         url: databaseUrl,
         authToken: tursoAuthToken,
       })
-
-      const adapter = new PrismaLibSQL(libsql)
-
-      // Process.env runtime override — Turbopack bakes process.env.DATABASE_URL
-      // as 'undefined' inside Prisma's generated code at build time.
-      // This runtime re-assignment fixes it before the constructor runs.
-      process.env['DATABASE_URL'] = databaseUrl
 
       return new PrismaClient({ adapter })
     } catch (adapterErr: unknown) {
