@@ -42,14 +42,13 @@ function createPrismaClient(): PrismaClient {
       })
 
       const adapter = new PrismaLibSQL(libsql)
-      return new PrismaClient({
-        adapter,
-        datasources: {
-          db: {
-            url: databaseUrl,
-          },
-        },
-      })
+
+      // Process.env runtime override — Turbopack bakes process.env.DATABASE_URL
+      // as 'undefined' inside Prisma's generated code at build time.
+      // This runtime re-assignment fixes it before the constructor runs.
+      process.env['DATABASE_URL'] = databaseUrl
+
+      return new PrismaClient({ adapter })
     } catch (adapterErr: unknown) {
       const msg = adapterErr instanceof Error ? adapterErr.message : String(adapterErr)
       console.error('[db] libSQL adapter failed:', msg)
