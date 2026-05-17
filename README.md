@@ -15,6 +15,27 @@ The AI dynamically assesses their skills, generates a personalized roadmap, teac
 
 **Total cost for any student: $0 forever.**
 
+## 🚀 One-Command Deploy (3 minutes)
+
+Want your own Vaathi instance? Fork this repo and run:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/vaathi.git
+cd vaathi
+npm install
+bash deploy.sh
+```
+
+That's it. The script automatically:
+1. Checks prerequisites (Node.js, npm, git)
+2. Installs Turso CLI + Vercel CLI if needed
+3. Signs you into Turso (browser-based, no passwords)
+4. Creates a free Turso database and pushes the schema
+5. Deploys to Vercel with all environment variables set
+6. Gives you your live URL
+
+> **Requirements:** Node.js 18+, npm, git, a GitHub account, and a Turso account (free, created during setup).
+
 ## Why Vaathi?
 
 | Problem | Solution |
@@ -28,7 +49,7 @@ The AI dynamically assesses their skills, generates a personalized roadmap, teac
 ## Architecture
 
 ```
-Student brings LLM API key (Groq/OpenAI/Together/Ollama)
+Student brings LLM API key (Groq/OpenRouter/OpenAI/Together/Ollama)
          │
          ▼
     ┌─────────────┐
@@ -61,14 +82,25 @@ Phase 3: Practice                   Phase 4: Re-assess
 
 | Component | Cost | Provider |
 |---|---|---|
-| LLM API | **FREE** | Student's own Groq key |
+| LLM API | **FREE** | Student's own Groq/OpenRouter key |
 | Hosting | **FREE** | Vercel Hobby |
 | Database | **FREE** | Turso Starter |
 | **Total** | **$0** | — |
 
 ## Getting Started
 
-### Local Development
+### Option A: Deploy Your Own Instance (Recommended)
+
+```bash
+git clone https://github.com/bb1nfosec/vaathi.git
+cd vaathi
+npm install
+bash deploy.sh
+```
+
+The script handles everything. Just follow the prompts.
+
+### Option B: Local Development
 
 ```bash
 # Clone
@@ -87,50 +119,30 @@ npm run dev
 
 Open http://localhost:3000
 
-### Deploy to Vercel (Free)
+### Manual Vercel Deployment
 
-#### Step 1: Create a Turso Database
+If you prefer doing it manually instead of using `deploy.sh`:
 
-```bash
-# Install Turso CLI
-curl -sSfL https://get.tur.so/install.sh | bash
+1. **Create Turso database:**
+   ```bash
+   npm install -g turso
+   turso auth login
+   turso db create vaathi
+   turso db show vaathi --url          # Copy this URL
+   turso auth api-tokens create vaathi # Copy this token
+   ```
 
-# Login
-turso auth login
+2. **Push schema:**
+   ```bash
+   TURSO_AUTH_TOKEN=your-token DATABASE_URL="libsql://vaathi-your-org.turso.io" npx prisma db push
+   ```
 
-# Create database
-turso db create vaathi
-
-# Get connection URL
-turso db show vaathi --url
-
-# Create auth token
-turso db tokens create vaathi
-```
-
-#### Step 2: Push Schema to Turso
-
-```bash
-# Set env vars
-export DATABASE_URL="libsql://vaathi-your-org.turso.io"
-export TURSO_AUTH_TOKEN="your-token"
-
-# Push schema
-npx prisma db push
-```
-
-#### Step 3: Deploy to Vercel
-
-1. Go to [vercel.com](https://vercel.com) and sign up (free)
-2. Import your GitHub repo
-3. Add environment variables:
-   - `DATABASE_URL` = `libsql://vaathi-your-org.turso.io`
-   - `TURSO_AUTH_TOKEN` = `your-turso-auth-token`
-4. Deploy!
-
-#### Alternative: Netlify / Railway
-
-Both work similarly — just set the env vars and connect your repo.
+3. **Deploy to Vercel:**
+   - Go to [vercel.com](https://vercel.com), import your repo
+   - Add environment variables:
+     - `DATABASE_URL` = your Turso URL
+     - `TURSO_AUTH_TOKEN` = your Turso token
+   - Deploy!
 
 ## Features
 
@@ -173,15 +185,16 @@ Each task: 2-5 minutes. AI generates AND evaluates your answer.
 
 ## Supported LLM Providers
 
-| Provider | Free? | Setup |
+| Provider | Free? | Get Key |
 |---|---|---|
-| **Groq** | ✅ Yes | Sign up, get key — instant |
-| OpenAI | ❌ Paid | API key from platform.openai.com |
-| Together AI | ✅ Trial | API key from together.ai |
-| Ollama (Local) | ✅ Yes | `ollama pull llama3`, no key needed |
-| Custom (OpenAI-compatible) | Varies | Any endpoint that matches OpenAI API |
+| **Groq** | ✅ Free | [console.groq.com](https://console.groq.com) |
+| **OpenRouter** | ✅ Free models | [openrouter.ai](https://openrouter.ai) |
+| **Together AI** | ✅ Trial | [together.ai](https://together.ai) |
+| OpenAI | ❌ Paid | [platform.openai.com](https://platform.openai.com) |
+| Ollama (Local) | ✅ Free | `ollama pull llama3`, no key needed |
+| Custom | Varies | Any OpenAI-compatible endpoint |
 
-**Recommendation for students:** Use [Groq](https://console.groq.com) — it's 100% free and fast.
+**Recommendation:** Use [Groq](https://console.groq.com) for a free API key — instant signup, no credit card.
 
 ## Tech Stack
 
@@ -192,6 +205,7 @@ Each task: 2-5 minutes. AI generates AND evaluates your answer.
 | State | Zustand |
 | Database | Prisma ORM + SQLite (local) / Turso (deployed) |
 | LLM | Student's own API key (BYOLLM) |
+| Deployment | Vercel (free) + Turso (free) |
 
 ## Contributing
 
