@@ -59,9 +59,6 @@ export default function Onboarding() {
     setSetupError('')
 
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 30000) // 30s timeout
-
       const id = await saveProfile({
         name: name.trim(),
         language,
@@ -71,19 +68,17 @@ export default function Onboarding() {
         llmBaseUrl: llmBaseUrl.trim(),
       })
 
-      clearTimeout(timeout)
       setIsSaving(false)
 
       if (id) {
         setView('dashboard')
       } else {
-        setSetupError('Something went wrong. Please try again.')
+        setSetupError('No response from server. Check your connection and try again.')
       }
     } catch (err) {
       setIsSaving(false)
-      setSetupError(err instanceof Error && err.name === 'AbortError'
-        ? 'Connection timed out. Check your internet and try again.'
-        : 'Failed to save profile. Please try again.')
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setSetupError(msg)
     }
   }
 

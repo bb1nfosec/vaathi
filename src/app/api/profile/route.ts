@@ -3,52 +3,65 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // GET: Fetch user profile
 export async function GET(request: NextRequest) {
-  await ensureSchema()
+  const schemaErr = await ensureSchema()
+  if (schemaErr) {
+    return NextResponse.json({ error: 'DB_SETUP', message: schemaErr }, { status: 500 })
+  }
+
   const userId = request.nextUrl.searchParams.get('id')
   if (!userId) {
     return NextResponse.json({ error: 'User ID required' }, { status: 400 })
   }
 
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    include: {
-      badges: { orderBy: { earnedAt: 'desc' } },
-      completedLabs: { orderBy: { completedAt: 'desc' }, take: 10 },
-      completedCTFs: { orderBy: { completedAt: 'desc' }, take: 10 },
-      chatMessages: { orderBy: { createdAt: 'desc' }, take: 20 },
-    },
-  })
+  try {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      include: {
+        badges: { orderBy: { earnedAt: 'desc' } },
+        completedLabs: { orderBy: { completedAt: 'desc' }, take: 10 },
+        completedCTFs: { orderBy: { completedAt: 'desc' }, take: 10 },
+        chatMessages: { orderBy: { createdAt: 'desc' }, take: 20 },
+      },
+    })
 
-  if (!user) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({
+      id: user.id,
+      name: user.name,
+      language: user.language,
+      llmProvider: user.llmProvider,
+      llmModel: user.llmModel,
+      hasApiKey: !!user.llmApiKey,
+      tier: user.tier,
+      xp: user.xp,
+      level: user.level,
+      streak: user.streak,
+      lastActive: user.lastActive,
+      topicProgress: user.topicProgress,
+      createdAt: user.createdAt,
+      badges: user.badges.map((b) => ({ id: b.id, badgeId: b.badgeId, name: b.name, emoji: b.emoji, earnedAt: b.earnedAt })),
+      completedLabs: user.completedLabs,
+      completedCTFs: user.completedCTFs,
+      recentMessages: user.chatMessages.reverse().slice(0, 20),
+    })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[profile GET] error:', message)
+    return NextResponse.json({ error: 'DB_QUERY', message }, { status: 500 })
   }
-
-  // Never send the API key to the client
-  return NextResponse.json({
-    id: user.id,
-    name: user.name,
-    language: user.language,
-    llmProvider: user.llmProvider,
-    llmModel: user.llmModel,
-    hasApiKey: !!user.llmApiKey,
-    tier: user.tier,
-    xp: user.xp,
-    level: user.level,
-    streak: user.streak,
-    lastActive: user.lastActive,
-    topicProgress: user.topicProgress,
-    createdAt: user.createdAt,
-    badges: user.badges.map((b) => ({ id: b.id, badgeId: b.badgeId, name: b.name, emoji: b.emoji, earnedAt: b.earnedAt })),
-    completedLabs: user.completedLabs,
-    completedCTFs: user.completedCTFs,
-    recentMessages: user.chatMessages.reverse().slice(0, 20),
-  })
 }
 
 // POST: Create or update user profile
 export async function POST(request: NextRequest) {
   try {
-    await ensureSchema()
+    const schemaErr = await ensureSchema()
+    if (schemaErr) {
+      return NextResponse.json({ error: 'DB_SETUP', message: schemaErr }, { status: 500 })
+    }
+
     const body = await request.json()
     const { id, name, language, llmProvider, llmApiKey, llmModel, llmBaseUrl } = body
 
@@ -57,7 +70,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (id) {
-      // Update existing user
       const updateData: Record<string, unknown> = {
         name: name.trim(),
         updatedAt: new Date(),
@@ -86,7 +98,6 @@ export async function POST(request: NextRequest) {
         streak: user.streak,
       })
     } else {
-      // Create new user
       const user = await db.user.create({
         data: {
           name: name.trim(),
@@ -99,15 +110,18 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // Award first login badge
-      await db.userBadge.create({
-        data: {
-          userId: user.id,
-          badgeId: 'first-journey',
-          name: 'First Steps',
-          emoji: '🚀',
-        },
-      })
+      try {
+        await db.userBadge.create({
+          data: {
+            userId: user.id,
+            badgeId: 'first-journey',
+            name: 'First Steps',
+            emoji: '🚀',
+          },
+        })
+      } catch {
+        // Badge creation is non-critical
+      }
 
       return NextResponse.json({
         id: user.id,
@@ -122,8 +136,9 @@ export async function POST(request: NextRequest) {
         streak: user.streak,
       })
     }
-  } catch (error) {
-    console.error('Profile API error:', error)
-    return NextResponse.json({ error: 'Failed to save profile' }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[profile POST] error:', message)
+    return NextResponse.json({ error: 'CREATE_FAILED', message }, { status: 500 })
   }
 }

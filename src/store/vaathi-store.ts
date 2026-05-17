@@ -529,6 +529,11 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
       })
       const result = await res.json()
 
+      if (result.error) {
+        // Return the error message so UI can display it
+        throw new Error(result.message || result.error || 'Failed to save profile')
+      }
+
       if (result.id) {
         localStorage.setItem('vaathi_userId', result.id)
         set({
@@ -554,7 +559,7 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
       return result.id
     } catch (error) {
       console.error('Save profile error:', error)
-      return null
+      throw error // Re-throw so onboarding can show the real error
     }
   },
 
