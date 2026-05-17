@@ -42,7 +42,14 @@ function createPrismaClient(): PrismaClient {
       })
 
       const adapter = new PrismaLibSQL(libsql)
-      return new PrismaClient({ adapter })
+      return new PrismaClient({
+        adapter,
+        datasources: {
+          db: {
+            url: databaseUrl,
+          },
+        },
+      })
     } catch (adapterErr: unknown) {
       const msg = adapterErr instanceof Error ? adapterErr.message : String(adapterErr)
       console.error('[db] libSQL adapter failed:', msg)
