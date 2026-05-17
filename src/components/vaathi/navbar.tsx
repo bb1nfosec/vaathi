@@ -14,7 +14,7 @@ import { motion } from 'framer-motion'
 import {
   Shield,
   Brain,
-  Swords,
+  BookOpen,
   Trophy,
   User,
   Terminal,
@@ -25,6 +25,7 @@ import { useState } from 'react'
 
 const navItems = [
   { id: 'dashboard' as const, label: 'Dashboard', icon: Terminal },
+  { id: 'roadmap' as const, label: 'Roadmap', icon: BookOpen },
   { id: 'guru' as const, label: 'Guru Chat', icon: Brain },
   { id: 'arena' as const, label: 'CTF Arena', icon: Trophy },
   { id: 'profile' as const, label: 'Profile', icon: User },

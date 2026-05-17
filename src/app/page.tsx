@@ -7,6 +7,9 @@ import Navbar from '@/components/vaathi/navbar'
 import LandingPage from '@/components/vaathi/landing'
 import Onboarding from '@/components/vaathi/onboarding'
 import Dashboard from '@/components/vaathi/dashboard'
+import AssessmentChat from '@/components/vaathi/assessment-chat'
+import LearningRoadmap from '@/components/vaathi/learning-roadmap'
+import TopicLearn from '@/components/vaathi/topic-learn'
 import GuruChat from '@/components/vaathi/guru-chat'
 import LabSession from '@/components/vaathi/lab-session'
 import Arena from '@/components/vaathi/arena'
@@ -19,7 +22,7 @@ export default function Home() {
     initSession()
   }, [initSession])
 
-  const showNavbar = ['dashboard', 'guru', 'lab', 'arena', 'profile'].includes(currentView)
+  const showNavbar = ['dashboard', 'assessment', 'roadmap', 'topic-learn', 'guru', 'lab', 'arena', 'profile'].includes(currentView)
 
   if (isLoading) {
     return (
@@ -43,6 +46,9 @@ export default function Home() {
           {currentView === 'landing' && <LandingPage />}
           {currentView === 'onboarding' && <Onboarding />}
           {currentView === 'dashboard' && <Dashboard />}
+          {currentView === 'assessment' && <AssessmentChat />}
+          {currentView === 'roadmap' && <LearningRoadmap />}
+          {currentView === 'topic-learn' && <TopicLearn />}
           {currentView === 'guru' && <GuruChat />}
           {currentView === 'lab' && <LabSession />}
           {currentView === 'arena' && <Arena />}

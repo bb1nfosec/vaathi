@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ViewType = 'landing' | 'onboarding' | 'dashboard' | 'guru' | 'lab' | 'arena' | 'profile'
+export type ViewType = 'landing' | 'onboarding' | 'dashboard' | 'assessment' | 'roadmap' | 'topic-learn' | 'guru' | 'lab' | 'arena' | 'profile'
 export type TierType = 'egg' | 'hatchling' | 'script_kiddie' | 'hacker' | 'burn'
 
 export interface Message {
@@ -52,6 +52,20 @@ export interface UserData {
   completedCTFs: Array<{ id: string; challengeTitle: string; category: string; difficulty: string; pointsEarned: number; completedAt: string }>
 }
 
+export interface RoadmapTopicData {
+  id: string
+  title: string
+  description: string
+  domain: string
+  difficulty: string
+  priority: number
+  status: string
+  explanation: string
+  exercise: string
+  quizJson: string
+  xpReward: number
+}
+
 interface VaathiState {
   currentView: ViewType
   userId: string | null
@@ -63,6 +77,22 @@ interface VaathiState {
   isStreaming: boolean
   streamContent: string
 
+  // Assessment
+  assessmentMessages: Message[]
+  assessmentStreaming: boolean
+  assessmentStreamContent: string
+  roadmapGenerated: boolean
+
+  // Roadmap
+  roadmapTopics: RoadmapTopicData[]
+  roadmapSummary: string
+  currentTopicId: string | null
+
+  // Topic learning
+  topicExplanation: string
+  topicQuiz: Array<{ question: string; options: string[]; correctIndex: number; explanation: string }> | null
+  topicLoading: boolean
+
   // Navigation
   setView: (view: ViewType) => void
 
@@ -72,7 +102,17 @@ interface VaathiState {
   // Profile
   saveProfile: (data: { name: string; language: string; llmProvider: string; llmApiKey: string; llmModel: string; llmBaseUrl: string }) => Promise<string | null>
 
-  // Chat
+  // Assessment
+  sendAssessmentMessage: (content: string) => Promise<void>
+
+  // Roadmap
+  loadRoadmap: () => Promise<void>
+  startTopic: (topicId: string) => Promise<void>
+  loadTopicExplanation: (topicId: string) => Promise<void>
+  loadTopicQuiz: (topicId: string) => Promise<void>
+  completeTopic: (topicId: string) => Promise<void>
+
+  // Chat (Guru)
   sendMessage: (content: string) => Promise<void>
   clearChat: () => void
   loadChatHistory: () => Promise<void>
@@ -97,6 +137,22 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
   currentCTF: null,
   isStreaming: false,
   streamContent: '',
+
+  // Assessment
+  assessmentMessages: [],
+  assessmentStreaming: false,
+  assessmentStreamContent: '',
+  roadmapGenerated: false,
+
+  // Roadmap
+  roadmapTopics: [],
+  roadmapSummary: '',
+  currentTopicId: null,
+
+  // Topic learning
+  topicExplanation: '',
+  topicQuiz: null,
+  topicLoading: false,
 
   setView: (view) => set({ currentView: view }),
 
@@ -127,8 +183,24 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
               completedCTFs: data.completedCTFs || [],
             },
             isLoading: false,
-            currentView: 'dashboard',
           })
+
+          // Check if user has a roadmap
+          const roadmapRes = await fetch(`/api/roadmap?userId=${data.id}`)
+          if (roadmapRes.ok) {
+            const roadmapData = await roadmapRes.json()
+            if (roadmapData.hasRoadmap) {
+              set({
+                roadmapTopics: roadmapData.topics || [],
+                roadmapSummary: roadmapData.summary || '',
+                roadmapGenerated: true,
+                currentView: 'dashboard',
+              })
+            } else {
+              // No roadmap yet — go to dashboard (which will prompt assessment)
+              set({ currentView: 'dashboard' })
+            }
+          }
           return
         }
       }
@@ -136,6 +208,209 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
       set({ isLoading: false })
     } catch {
       set({ isLoading: false })
+    }
+  },
+
+  // Assessment: send a message during skill assessment
+  sendAssessmentMessage: async (content) => {
+    const { userId, assessmentMessages } = get()
+
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    }
+    set((s) => ({
+      assessmentMessages: [...s.assessmentMessages, userMsg],
+      assessmentStreaming: true,
+      assessmentStreamContent: '',
+    }))
+
+    try {
+      const allMessages = [...assessmentMessages, userMsg]
+      const res = await fetch('/api/assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
+          userId,
+        }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.message || 'Failed')
+      }
+
+      const contentType = res.headers.get('content-type') || ''
+      let fullContent = ''
+
+      if (contentType.includes('text/event-stream')) {
+        const reader = res.body?.getReader()
+        const decoder = new TextDecoder()
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value, { stream: true })
+            const lines = chunk.split('\n').filter((line) => line.startsWith('data: '))
+
+            for (const line of lines) {
+              const data = line.slice(6)
+              if (data === '[DONE]') continue
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.error) {
+                  fullContent = `\u26a0\ufe0f ${parsed.message || 'Error'}`
+                  break
+                }
+                if (parsed.type === 'roadmap_saved') {
+                  // Roadmap was saved — load it
+                  await get().loadRoadmap()
+                  set({ roadmapGenerated: true })
+                }
+                if (parsed.content) {
+                  fullContent += parsed.content
+                  set({ assessmentStreamContent: fullContent })
+                }
+              } catch {
+                // skip
+              }
+            }
+          }
+          reader.releaseLock()
+        }
+      }
+
+      const guruMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: fullContent || 'No response.',
+        timestamp: new Date(),
+      }
+      set((s) => ({
+        assessmentMessages: [...s.assessmentMessages, guruMsg],
+        assessmentStreaming: false,
+        assessmentStreamContent: '',
+      }))
+    } catch (error) {
+      const err = error instanceof Error ? error.message : 'Failed'
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `\u26a0\ufe0f ${err}`,
+        timestamp: new Date(),
+      }
+      set((s) => ({
+        assessmentMessages: [...s.assessmentMessages, errorMsg],
+        assessmentStreaming: false,
+        assessmentStreamContent: '',
+      }))
+    }
+  },
+
+  // Roadmap: load roadmap from DB
+  loadRoadmap: async () => {
+    const { userId } = get()
+    if (!userId) return
+    try {
+      const res = await fetch(`/api/roadmap?userId=${userId}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.hasRoadmap) {
+          set({
+            roadmapTopics: data.topics || [],
+            roadmapSummary: data.summary || '',
+            roadmapGenerated: true,
+          })
+        }
+      }
+    } catch {
+      // ignore
+    }
+  },
+
+  // Topic: start learning a topic
+  startTopic: async (topicId) => {
+    const { userId } = get()
+    if (!userId) return
+    set({ currentTopicId: topicId, topicExplanation: '', topicQuiz: null, currentView: 'topic-learn' })
+    try {
+      await fetch('/api/topic-learn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, topicId, action: 'start' }),
+      })
+    } catch {
+      // ignore
+    }
+  },
+
+  // Topic: load explanation
+  loadTopicExplanation: async (topicId) => {
+    const { userId } = get()
+    if (!userId) return
+    set({ topicLoading: true })
+    try {
+      const res = await fetch('/api/topic-learn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, topicId, action: 'explain' }),
+      })
+      const data = await res.json()
+      if (data.explanation) {
+        set({ topicExplanation: data.explanation })
+      } else if (data.error === 'NO_API_KEY') {
+        set({ topicExplanation: '\u26a0\ufe0f Set up your LLM API key in Profile to get AI explanations.' })
+      }
+    } catch {
+      set({ topicExplanation: 'Failed to load explanation. Try again.' })
+    } finally {
+      set({ topicLoading: false })
+    }
+  },
+
+  // Topic: load quiz
+  loadTopicQuiz: async (topicId) => {
+    const { userId } = get()
+    if (!userId) return
+    set({ topicLoading: true })
+    try {
+      const res = await fetch('/api/topic-learn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, topicId, action: 'quiz' }),
+      })
+      const data = await res.json()
+      if (data.quiz) {
+        set({ topicQuiz: data.quiz })
+      } else if (data.error === 'NO_API_KEY') {
+        set({ topicQuiz: [{ question: 'Set up your LLM API key in Profile to get AI quizzes.', options: ['Go to Profile', 'Later'], correctIndex: 0, explanation: 'Profile > LLM Settings' }] })
+      }
+    } catch {
+      set({ topicQuiz: [{ question: 'Failed to load quiz.', options: ['Retry'], correctIndex: 0, explanation: 'Try again.' }] })
+    } finally {
+      set({ topicLoading: false })
+    }
+  },
+
+  // Topic: complete
+  completeTopic: async (topicId) => {
+    const { userId } = get()
+    if (!userId) return
+    try {
+      await fetch('/api/topic-learn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, topicId, action: 'complete' }),
+      })
+      await get().loadRoadmap()
+      await get().refreshUser()
+    } catch {
+      // ignore
     }
   },
 

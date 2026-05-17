@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import {
   Brain,
-  Swords,
   Trophy,
   Flame,
   Star,
@@ -17,10 +16,12 @@ import {
   ArrowRight,
   MessageSquare,
   Shield,
+  BookOpen,
+  Sparkles,
 } from 'lucide-react'
 
 export default function Dashboard() {
-  const { user, setView, refreshUser } = useVaathiStore()
+  const { user, setView, refreshUser, roadmapGenerated, roadmapTopics } = useVaathiStore()
   const { xp, level, xpInLevel, xpForNext, progress } = useXPProgress()
 
   useEffect(() => {
@@ -34,6 +35,8 @@ export default function Dashboard() {
   const totalBadges = user.badges.length
   const totalLabs = user.completedLabs.length
   const totalCTFs = user.completedCTFs.length
+  const completedTopics = roadmapTopics.filter((t) => t.status === 'completed').length
+  const nextAvailableTopic = roadmapTopics.find((t) => t.status === 'available')
 
   // Parse topic progress
   let topicProgress: Record<string, number> = {}
@@ -178,40 +181,82 @@ export default function Dashboard() {
                   <CardTitle className="text-sm">Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid sm:grid-cols-3 gap-3">
+                  {!roadmapGenerated && (
+                    <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-neon/10 to-cyan-500/5 border border-neon/30">
+                      <div className="flex items-start gap-3">
+                        <Sparkles className="w-5 h-5 text-neon shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-neon mb-1">Start Your Skill Assessment</p>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            I&apos;ll ask you nerdy questions about networking, Linux, web security, crypto and more. 
+                            Based on how you explain things, I&apos;ll create a personalized learning roadmap just for you.
+                          </p>
+                          <Button onClick={() => setView('assessment')} className="gap-2 bg-neon text-cyber-dark hover:bg-neon/90 text-xs">
+                            <Sparkles className="w-3.5 h-3.5" /> Start Assessment
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {roadmapGenerated && nextAvailableTopic && (
+                    <div className="mb-4 p-4 rounded-xl bg-neon/5 border border-neon/20">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-neon font-medium mb-0.5">CONTINUE LEARNING</p>
+                          <p className="text-sm font-semibold">{nextAvailableTopic.title}</p>
+                          <p className="text-xs text-muted-foreground">{nextAvailableTopic.description.slice(0, 60)}...</p>
+                        </div>
+                        <Button onClick={() => setView('roadmap')} size="sm" className="bg-neon text-cyber-dark hover:bg-neon/90 gap-1 shrink-0">
+                          <ArrowRight className="w-3.5 h-3.5" /> Go
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {roadmapGenerated && (
+                      <Button
+                        onClick={() => setView('roadmap')}
+                        className="gap-3 h-auto p-3 bg-neon/5 border border-neon/20 hover:bg-neon/10 text-neon justify-start"
+                        variant="ghost"
+                      >
+                        <BookOpen className="w-5 h-5 shrink-0" />
+                        <div className="text-left">
+                          <div className="font-semibold text-sm">Roadmap</div>
+                          <div className="text-xs text-neon/60">{completedTopics} done</div>
+                        </div>
+                      </Button>
+                    )}
                     <Button
                       onClick={() => setView('guru')}
-                      className="gap-3 h-auto p-4 bg-neon/5 border border-neon/20 hover:bg-neon/10 text-neon justify-start"
+                      className="gap-3 h-auto p-3 bg-white/5 border border-cyber-border hover:bg-white/10 text-foreground justify-start"
                       variant="ghost"
                     >
                       <Brain className="w-5 h-5 shrink-0" />
                       <div className="text-left">
-                        <div className="font-semibold text-sm">Ask Guru</div>
-                        <div className="text-xs text-neon/60">Chat with AI mentor</div>
-                      </div>
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setView('guru')
-                      }}
-                      className="gap-3 h-auto p-4 bg-ice/5 border border-ice/20 hover:bg-ice/10 text-ice justify-start"
-                      variant="ghost"
-                    >
-                      <Swords className="w-5 h-5 shrink-0" />
-                      <div className="text-left">
-                        <div className="font-semibold text-sm">Generate Lab</div>
-                        <div className="text-xs text-ice/60">AI creates a lab for you</div>
+                        <div className="font-semibold text-sm">Guru Chat</div>
+                        <div className="text-xs text-muted-foreground">Ask anything</div>
                       </div>
                     </Button>
                     <Button
                       onClick={() => setView('arena')}
-                      className="gap-3 h-auto p-4 bg-fire/5 border border-fire/20 hover:bg-fire/10 text-fire justify-start"
+                      className="gap-3 h-auto p-3 bg-fire/5 border border-fire/20 hover:bg-fire/10 text-fire justify-start"
                       variant="ghost"
                     >
                       <Trophy className="w-5 h-5 shrink-0" />
                       <div className="text-left">
                         <div className="font-semibold text-sm">CTF Arena</div>
                         <div className="text-xs text-fire/60">Solve challenges</div>
+                      </div>
+                    </Button>
+                    <Button
+                      onClick={() => setView('assessment')}
+                      className="gap-3 h-auto p-3 bg-white/5 border border-cyber-border hover:bg-white/10 text-foreground justify-start"
+                      variant="ghost"
+                    >
+                      <Sparkles className="w-5 h-5 shrink-0" />
+                      <div className="text-left">
+                        <div className="font-semibold text-sm">Re-assess</div>
+                        <div className="text-xs text-muted-foreground">New roadmap</div>
                       </div>
                     </Button>
                   </div>
