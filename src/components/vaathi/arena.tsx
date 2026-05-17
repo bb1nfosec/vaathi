@@ -29,12 +29,13 @@ import {
 } from 'lucide-react'
 
 export default function Arena() {
-  const { user, completeCTF } = useVaathiStore()
+  const { user, submitCTFFlag } = useVaathiStore()
   const [activeTab, setActiveTab] = useState('challenges')
   const [filterDifficulty, setFilterDifficulty] = useState<string | null>(null)
   const [searchCTF, setSearchCTF] = useState('')
   const [flagInput, setFlagInput] = useState<Record<string, string>>({})
-  const [solvedCTFs, setSolvedCTFs] = useState<Set<string>>(new Set())
+  const [submitting, setSubmitting] = useState<string | null>(null)
+  const [submitResults, setSubmitResults] = useState<Record<string, string>>({})
 
   const filteredCTFs = ctfChallenges.filter((ctf) => {
     const matchesSearch = !searchCTF || ctf.title.toLowerCase().includes(searchCTF.toLowerCase())
@@ -42,16 +43,17 @@ export default function Arena() {
     return matchesSearch && matchesDifficulty
   })
 
-  const handleFlagSubmit = (ctfId: string, correctFlag: string) => {
+  const handleFlagSubmit = async (ctfId: string) => {
     const input = flagInput[ctfId]?.trim()
-    if (!input) return
-    if (input.toUpperCase() === correctFlag.toUpperCase()) {
-      const ctf = ctfChallenges.find((c) => c.id === ctfId)
-      if (ctf && !solvedCTFs.has(ctfId)) {
-        completeCTF(ctfId, ctf.points)
-        setSolvedCTFs((prev) => new Set([...prev, ctfId]))
-      }
+    if (!input || submitting) return
+    setSubmitting(ctfId)
+    setSubmitResults((prev) => ({ ...prev, [ctfId]: '' }))
+    const result = await submitCTFFlag(ctfId, input)
+    setSubmitResults((prev) => ({ ...prev, [ctfId]: result.message }))
+    if (result.correct) {
+      setFlagInput((prev) => ({ ...prev, [ctfId]: '' }))
     }
+    setSubmitting(null)
   }
 
   const userRank = leaderboard.findIndex((e) => e.points <= user.xp) + 1 || leaderboard.length + 1
@@ -78,7 +80,7 @@ export default function Arena() {
         >
           {[
             { icon: Trophy, label: 'Your Rank', value: `#${userRank}`, color: '#f59e0b' },
-            { icon: Flag, label: 'CTFs Solved', value: solvedCTFs.size.toString(), color: '#22c55e' },
+            { icon: Flag, label: 'CTFs Solved', value: user.completedCTFs.length.toString(), color: '#22c55e' },
             { icon: Users, label: 'Your Points', value: (user.xp).toLocaleString(), color: '#06b6d4' },
             { icon: Medal, label: 'Your Tier', value: TIER_CONFIG[user.tier].emoji + ' ' + TIER_CONFIG[user.tier].label, color: TIER_CONFIG[user.tier].color },
           ].map((stat) => (
@@ -150,25 +152,18 @@ export default function Arena() {
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredCTFs.map((ctf, i) => {
-                const isSolved = solvedCTFs.has(ctf.id)
+                const isSolved = user.completedCTFs.includes(ctf.id)
+                const resultMsg = submitResults[ctf.id]
+                const isSubmitting = submitting === ctf.id
                 return (
-                  <motion.div
-                    key={ctf.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                  >
+                  <motion.div key={ctf.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                     <Card className={`bg-white/[0.02] border-cyber-border hover:border-white/10 transition-all ${
                       isSolved ? 'border-neon/30' : ''
                     }`}>
                       <CardContent className="p-5">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className="text-xs"
-                              style={{ borderColor: difficultyColors[ctf.difficulty], color: difficultyColors[ctf.difficulty] }}
-                            >
+                            <Badge variant="outline" className="text-xs" style={{ borderColor: difficultyColors[ctf.difficulty], color: difficultyColors[ctf.difficulty] }}>
                               {ctf.difficulty}
                             </Badge>
                             <Badge variant="outline" className="text-xs border-cyber-border text-muted-foreground">
@@ -186,38 +181,25 @@ export default function Arena() {
                         <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{ctf.description}</p>
 
                         <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4">
-                          <span className="flex items-center gap-1">
-                            <Zap className="w-3 h-3" />
-                            {ctf.points} pts
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {ctf.timeRemaining}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Users className="w-3 h-3" />
-                            {ctf.participants}
-                          </span>
+                          <span className="flex items-center gap-1"><Zap className="w-3 h-3" />{ctf.points} pts</span>
+                          <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{ctf.timeRemaining}</span>
+                          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{ctf.participants}</span>
                         </div>
 
                         {!isSolved && (
-                          <div className="flex gap-2">
-                            <Input
-                              value={flagInput[ctf.id] || ''}
-                              onChange={(e) => setFlagInput({ ...flagInput, [ctf.id]: e.target.value })}
-                              placeholder="Enter flag..."
-                              className="flex-1 bg-white/5 border-cyber-border text-xs font-mono focus:border-neon"
-                            />
-                            <Button
-                              size="sm"
-                              onClick={() => handleFlagSubmit(ctf.id, ctf.flag)}
-                              disabled={!flagInput[ctf.id]?.trim()}
-                              className="bg-neon text-cyber-dark hover:bg-neon/90 text-xs glow-green"
-                            >
-                              <Flag className="w-3 h-3 mr-1" />
-                              Submit
-                            </Button>
-                          </div>
+                          <>
+                            <div className="flex gap-2">
+                              <Input value={flagInput[ctf.id] || ''} onChange={(e) => setFlagInput({ ...flagInput, [ctf.id]: e.target.value })}
+                                placeholder="Enter flag..." className="flex-1 bg-white/5 border-cyber-border text-xs font-mono focus:border-neon" />
+                              <Button size="sm" onClick={() => handleFlagSubmit(ctf.id)} disabled={!flagInput[ctf.id]?.trim() || isSubmitting}
+                                className="bg-neon text-cyber-dark hover:bg-neon/90 text-xs glow-green">
+                                {isSubmitting ? '...' : <><Flag className="w-3 h-3 mr-1" />Submit</>}
+                              </Button>
+                            </div>
+                            {resultMsg && (
+                              <p className={`text-xs mt-2 ${resultMsg.includes('Incorrect') ? 'text-destructive' : 'text-neon'}`}>{resultMsg}</p>
+                            )}
+                          </>
                         )}
                       </CardContent>
                     </Card>
