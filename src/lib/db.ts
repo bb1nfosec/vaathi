@@ -6,10 +6,11 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient(): PrismaClient {
-  const tursoAuthToken = process.env.TURSO_AUTH_TOKEN
+  const tursoAuthToken = process.env.TURSO_AUTH_TOKEN || ''
   const databaseUrl = process.env.DATABASE_URL || ''
 
-  if (tursoAuthToken && databaseUrl.startsWith('libsql://')) {
+  // Turso mode: need BOTH token and libsql:// URL
+  if (tursoAuthToken.length > 0 && databaseUrl.startsWith('libsql://')) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { PrismaLibSQL } = require('@prisma/adapter-libsql')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -24,6 +25,8 @@ function createPrismaClient(): PrismaClient {
     return new PrismaClient({ adapter })
   }
 
+  // SQLite fallback: need at least a file: URL
+  // If DATABASE_URL is not set at all, Prisma will throw a clear error
   return new PrismaClient()
 }
 
@@ -31,8 +34,7 @@ export const db = globalForPrisma.prisma ?? createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
 
-// DDL statements to create all tables — uses libSQL client directly
-// (Prisma's $executeRawUnsafe can be unreliable with DDL on Turso)
+// DDL statements — uses libSQL client directly for Turso, Prisma raw for SQLite
 const TABLE_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -118,46 +120,49 @@ const TABLE_STATEMENTS = [
 
 let _ensurePromise: Promise<string | null> | null = null
 
-// Ensure all tables exist. Returns null on success, or an error message string.
 export async function ensureSchema(): Promise<string | null> {
   if (globalForPrisma.schemaEnsured) return null
   if (_ensurePromise) return _ensurePromise
 
   _ensurePromise = (async () => {
-    const tursoAuthToken = process.env.TURSO_AUTH_TOKEN
+    const tursoAuthToken = process.env.TURSO_AUTH_TOKEN || ''
     const databaseUrl = process.env.DATABASE_URL || ''
-    const isTurso = !!(tursoAuthToken && databaseUrl.startsWith('libsql://'))
+    const isTurso = tursoAuthToken.length > 0 && databaseUrl.startsWith('libsql://')
+
+    // Guard: if no DATABASE_URL at all, fail immediately
+    if (!databaseUrl) {
+      const msg = 'DATABASE_URL environment variable is not set. Please set it in Vercel dashboard → Settings → Environment Variables.'
+      console.error('[vaathi]', msg)
+      _ensurePromise = null
+      return msg
+    }
 
     try {
       if (isTurso) {
-        // Use libSQL client directly for DDL — more reliable than Prisma's $executeRaw
         const { createClient } = require('@libsql/client')
-        const libsql = createClient({ url: databaseUrl, authToken: tursoAuthToken })
+        const libsql = createClient({ url: databaseUrl, authToken: tursoToken })
 
-        // Test connection first
+        // Verify connection first
         await libsql.execute('SELECT 1')
 
-        // Create each table
         for (const sql of TABLE_STATEMENTS) {
           await libsql.execute(sql)
         }
-
-        console.log('[vaathi] Turso schema ensured ✓')
+        console.log('[vaathi] Turso schema ensured')
       } else {
-        // Local SQLite — use Prisma's $executeRawUnsafe
+        // Local SQLite via Prisma
         for (const sql of TABLE_STATEMENTS) {
           await db.$executeRawUnsafe(sql)
         }
-        console.log('[vaathi] SQLite schema ensured ✓')
+        console.log('[vaathi] SQLite schema ensured')
       }
       globalForPrisma.schemaEnsured = true
       return null
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
       console.error('[vaathi] Schema setup failed:', message)
-      // Don't mark as ensured — retry on next call
-      _ensurePromise = null
-      return `Database setup failed: ${message}`
+      _ensurePromise = null // allow retry
+      return `Database error: ${message}`
     }
   })()
 
