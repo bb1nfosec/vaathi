@@ -140,7 +140,7 @@ export async function ensureSchema(): Promise<string | null> {
     try {
       if (isTurso) {
         const { createClient } = require('@libsql/client')
-        const libsql = createClient({ url: databaseUrl, authToken: tursoToken })
+        const libsql = createClient({ url: databaseUrl, authToken: tursoAuthToken })
 
         // Verify connection first
         await libsql.execute('SELECT 1')
