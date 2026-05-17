@@ -4,7 +4,10 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // Hardcoded dummy URL — prevents Turbopack from baking "undefined" at build time.
+  // When using PrismaLibSQL adapter (Turso), this URL is ignored — the adapter
+  // handles the real connection. For SQLite fallback, db.ts passes explicit datasources.
+  url      = "file:./dummy.db"
 }
 
 model User {
