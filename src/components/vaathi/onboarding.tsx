@@ -28,6 +28,7 @@ export default function Onboarding() {
   const [llmBaseUrl, setLlmBaseUrl] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [setupError, setSetupError] = useState('')
 
   const currentProvider = LLM_PROVIDERS.find((p) => p.id === llmProvider)
   const models = currentProvider?.models || []
@@ -35,35 +36,54 @@ export default function Onboarding() {
   const canProceed = () => {
     if (step === 0) return name.trim().length >= 2
     if (step === 1) return true
-    if (step === 2) return llmApiKey.trim().length > 0
+    if (step === 2) return llmApiKey.trim().length > 0 || llmProvider === 'ollama'
     if (step === 3) return llmModel.trim().length > 0
     return true
   }
 
   const handleNext = () => {
+    setSetupError('')
     if (step < 3 && canProceed()) {
       setStep(step + 1)
     }
   }
 
   const handleBack = () => {
+    setSetupError('')
     if (step > 0) setStep(step - 1)
   }
 
   const handleFinish = async () => {
     if (!canProceed()) return
     setIsSaving(true)
-    const id = await saveProfile({
-      name: name.trim(),
-      language,
-      llmProvider,
-      llmApiKey: llmApiKey.trim(),
-      llmModel: llmModel.trim(),
-      llmBaseUrl: llmBaseUrl.trim(),
-    })
-    setIsSaving(false)
-    if (id) {
-      setView('dashboard')
+    setSetupError('')
+
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 30000) // 30s timeout
+
+      const id = await saveProfile({
+        name: name.trim(),
+        language,
+        llmProvider,
+        llmApiKey: llmProvider === 'ollama' ? '' : llmApiKey.trim(),
+        llmModel: llmModel.trim(),
+        llmBaseUrl: llmBaseUrl.trim(),
+      })
+
+      clearTimeout(timeout)
+      setIsSaving(false)
+
+      if (id) {
+        setView('dashboard')
+      } else {
+        setSetupError('Something went wrong. Please try again.')
+      }
+    } catch (err) {
+      setIsSaving(false)
+      setSetupError(err instanceof Error && err.name === 'AbortError'
+        ? 'Connection timed out. Check your internet and try again.'
+        : 'Failed to save profile. Please try again.')
     }
   }
 
@@ -390,6 +410,13 @@ export default function Onboarding() {
                 </Button>
               )}
             </div>
+
+            {/* Error message */}
+            {setupError && (
+              <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
+                ⚠️ {setupError}
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>

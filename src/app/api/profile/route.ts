@@ -1,8 +1,9 @@
-import { db } from '@/lib/db'
+import { db, ensureSchema } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 // GET: Fetch user profile
 export async function GET(request: NextRequest) {
+  await ensureSchema()
   const userId = request.nextUrl.searchParams.get('id')
   if (!userId) {
     return NextResponse.json({ error: 'User ID required' }, { status: 400 })
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
 // POST: Create or update user profile
 export async function POST(request: NextRequest) {
   try {
+    await ensureSchema()
     const body = await request.json()
     const { id, name, language, llmProvider, llmApiKey, llmModel, llmBaseUrl } = body
 

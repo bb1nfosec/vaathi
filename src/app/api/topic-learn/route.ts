@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, ensureSchema } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 const PROVIDER_URLS: Record<string, string> = {
@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
     if (!userId || !topicId || !action) {
       return NextResponse.json({ error: 'userId, topicId, and action required' }, { status: 400 })
     }
+    await ensureSchema()
 
     const user = await db.user.findUnique({ where: { id: userId } })
     if (!user) {

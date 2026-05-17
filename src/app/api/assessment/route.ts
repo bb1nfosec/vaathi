@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, ensureSchema } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 const PROVIDER_URLS: Record<string, string> = {
@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { userId, messages } = body
+    await ensureSchema()
 
     if (!userId || !messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'userId and messages required' }, { status: 400 })
