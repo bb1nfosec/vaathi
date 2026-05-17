@@ -1,175 +1,132 @@
 import { create } from 'zustand'
 
-export type ViewType = 'landing' | 'assessment' | 'dashboard' | 'guru-chat' | 'labs' | 'lab-detail' | 'arena' | 'profile'
-export type TierType = 'egg' | 'hatch' | 'fly' | 'soar' | 'burn'
+export type ViewType = 'landing' | 'onboarding' | 'dashboard' | 'guru' | 'lab' | 'arena' | 'profile'
+export type TierType = 'egg' | 'hatchling' | 'script_kiddie' | 'hacker' | 'burn'
 
 export interface Message {
   id: string
-  role: 'user' | 'guru'
+  role: 'user' | 'assistant'
   content: string
   timestamp: Date
 }
 
-export interface LabProgress {
-  labId: string
-  currentStep: number
-  hintsUsed: number
-  completed: boolean
+export interface LabData {
+  type: 'lab'
+  title: string
+  difficulty: string
+  description: string
+  scenario: string
+  steps: Array<{ title: string; command: string; explanation: string }>
+  hints: string[]
+  flag: string
+  xpReward: number
+}
+
+export interface CTFData {
+  type: 'ctf'
+  title: string
+  category: string
+  difficulty: string
+  points: number
+  description: string
+  challenge: string
+  hints: string[]
+  flag: string
+  xpReward: number
+}
+
+export interface UserData {
+  id: string
+  name: string
+  language: string
+  llmProvider: string
+  llmModel: string
+  hasApiKey: boolean
+  tier: TierType
+  xp: number
+  level: number
+  streak: number
+  topicProgress: string
+  badges: Array<{ id: string; badgeId: string; name: string; emoji: string; earnedAt: string }>
+  completedLabs: Array<{ id: string; labTitle: string; difficulty: string; xpEarned: number; hintsUsed: number; completedAt: string }>
+  completedCTFs: Array<{ id: string; challengeTitle: string; category: string; difficulty: string; pointsEarned: number; completedAt: string }>
 }
 
 interface VaathiState {
   currentView: ViewType
-  previousView: ViewType | null
   userId: string | null
   isLoading: boolean
-  user: {
-    name: string
-    tier: TierType
-    xp: number
-    level: number
-    streak: number
-    college: string
-    state: string
-    completedLabs: string[]
-    completedCTFs: string[]
-    badges: string[]
-    certificates: string[]
-    skills: {
-      networking: number
-      webHacking: number
-      linux: number
-      crypto: number
-      malware: number
-    }
-  }
-  assessment: {
-    currentQuestion: number
-    answers: Record<number, number>
-    completed: boolean
-    tier: TierType | null
-  }
-  chat: {
-    messages: Message[]
-    language: 'english' | 'hindi' | 'tamil'
-  }
-  selectedLab: string | null
-  labProgress: Record<string, LabProgress>
+  user: UserData | null
+  chatMessages: Message[]
+  currentLab: LabData | null
+  currentCTF: CTFData | null
+  isStreaming: boolean
+  streamContent: string
 
   // Navigation
   setView: (view: ViewType) => void
-  goBack: () => void
 
   // Session management
   initSession: () => Promise<void>
-  saveSession: () => Promise<void>
 
-  // Assessment (calls API)
-  completeAssessment: (answers: Record<number, number>, name: string) => Promise<void>
+  // Profile
+  saveProfile: (data: { name: string; language: string; llmProvider: string; llmApiKey: string; llmModel: string; llmBaseUrl: string }) => Promise<string | null>
 
-  // Lab completion (calls API)
-  completeLab: (labId: string, xp: number) => Promise<void>
-
-  // CTF submission (calls API)
-  submitCTFFlag: (challengeId: string, flag: string) => Promise<{ correct: boolean; points?: number; message: string; newBadges?: string[] }>
-
-  // Chat (calls API)
+  // Chat
   sendMessage: (content: string) => Promise<void>
+  clearChat: () => void
+  loadChatHistory: () => Promise<void>
 
-  // Lab progress (local state, saved on complete)
-  selectLab: (labId: string | null) => void
-  updateLabStep: (labId: string, step: number) => void
-  spendHint: (labId: string) => void
+  // Lab/CTF
+  setCurrentLab: (lab: LabData | null) => void
+  setCurrentCTF: (ctf: CTFData | null) => void
+  completeLab: (hintsUsed: number) => Promise<void>
+  submitCTFFlag: (flag: string) => Promise<{ correct: boolean; message: string; points?: number; tierChanged?: boolean; newBadges?: Array<{ badgeId: string; name: string; emoji: string }> }>
 
-  // Language
-  setChatLanguage: (lang: 'english' | 'hindi' | 'tamil') => void
-
-  // Local state setters
-  setUser: (user: Partial<VaathiState['user']> & { id?: string }) => void
-  addGuruMessageLocal: (content: string) => void
-}
-
-function calcLevel(xp: number): number {
-  return Math.floor(xp / 1000) + 1
+  // Refresh user data from DB
+  refreshUser: () => Promise<void>
 }
 
 export const useVaathiStore = create<VaathiState>((set, get) => ({
   currentView: 'landing',
-  previousView: null,
   userId: null,
   isLoading: true,
-  user: {
-    name: 'Hacker',
-    tier: 'egg',
-    xp: 0,
-    level: 1,
-    streak: 0,
-    college: '',
-    state: '',
-    completedLabs: [],
-    completedCTFs: [],
-    badges: [],
-    certificates: [],
-    skills: { networking: 0, webHacking: 0, linux: 0, crypto: 0, malware: 0 },
-  },
-  assessment: {
-    currentQuestion: 0,
-    answers: {},
-    completed: false,
-    tier: null,
-  },
-  chat: {
-    messages: [],
-    language: 'english',
-  },
-  selectedLab: null,
-  labProgress: {},
+  user: null,
+  chatMessages: [],
+  currentLab: null,
+  currentCTF: null,
+  isStreaming: false,
+  streamContent: '',
 
-  setView: (view) =>
-    set((s) => ({ previousView: s.currentView, currentView: view })),
+  setView: (view) => set({ currentView: view }),
 
-  goBack: () =>
-    set((s) => ({
-      currentView: s.previousView || 'dashboard',
-      previousView: null,
-    })),
-
-  // Initialize session from localStorage/DB
   initSession: async () => {
     try {
-      const savedUserId = localStorage.getItem('vaathi_userId')
+      const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('vaathi_userId') : null
 
       if (savedUserId) {
-        // Restore from database
-        const res = await fetch(`/api/user?id=${savedUserId}`)
+        const res = await fetch(`/api/profile?id=${savedUserId}`)
         if (res.ok) {
           const data = await res.json()
           set({
             userId: data.id,
-            isLoading: false,
             user: {
-              name: data.name || 'Hacker',
-              tier: (data.tier || 'egg') as TierType,
-              xp: data.xp || 0,
-              level: data.level || 1,
-              streak: data.streak || 0,
-              college: data.college || '',
-              state: data.state || '',
+              id: data.id,
+              name: data.name,
+              language: data.language,
+              llmProvider: data.llmProvider,
+              llmModel: data.llmModel,
+              hasApiKey: data.hasApiKey,
+              tier: data.tier as TierType,
+              xp: data.xp,
+              level: data.level,
+              streak: data.streak,
+              topicProgress: data.topicProgress || '{}',
+              badges: data.badges || [],
               completedLabs: data.completedLabs || [],
               completedCTFs: data.completedCTFs || [],
-              badges: data.badges || [],
-              certificates: [],
-              skills: data.skills || { networking: 0, webHacking: 0, linux: 0, crypto: 0, malware: 0 },
             },
-            assessment: { currentQuestion: 0, answers: {}, completed: true, tier: data.tier as TierType },
-            chat: {
-              messages: (data.recentMessages || []).map((m: { id: string; role: string; content: string; createdAt: string }) => ({
-                id: m.id,
-                role: m.role as 'user' | 'guru',
-                content: m.content,
-                timestamp: new Date(m.createdAt),
-              })),
-              language: (data.recentMessages?.[0]?.language as 'english' | 'hindi' | 'tamil') || 'english',
-            },
+            isLoading: false,
             currentView: 'dashboard',
           })
           return
@@ -178,298 +135,336 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
 
       set({ isLoading: false })
     } catch {
-      // If anything fails, just show the landing page
       set({ isLoading: false })
     }
   },
 
-  // Save current state to DB
-  saveSession: async () => {
-    const { userId, user } = get()
-    if (!userId) return
-
+  saveProfile: async (data) => {
+    const { userId } = get()
     try {
-      await fetch('/api/user', {
+      const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: userId,
-          name: user.name,
-          tier: user.tier,
-          xp: user.xp,
-          level: user.level,
-          streak: user.streak,
-          skills: user.skills,
-          badges: user.badges,
+          id: userId || undefined,
+          name: data.name,
+          language: data.language,
+          llmProvider: data.llmProvider,
+          llmApiKey: data.llmApiKey,
+          llmModel: data.llmModel,
+          llmBaseUrl: data.llmBaseUrl,
         }),
       })
-    } catch {
-      // Silently fail — localStorage acts as backup
-    }
-  },
+      const result = await res.json()
 
-  // Assessment — calls real API
-  completeAssessment: async (answers, name) => {
-    try {
-      const res = await fetch('/api/assessment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers, name, userId: get().userId }),
-      })
-      const data = await res.json()
-
-      if (data.user) {
-        const userId = data.user.id
-        localStorage.setItem('vaathi_userId', userId)
+      if (result.id) {
+        localStorage.setItem('vaathi_userId', result.id)
         set({
-          userId,
+          userId: result.id,
           user: {
-            name: data.user.name,
-            tier: data.user.tier as TierType,
-            xp: data.user.xp,
-            level: data.user.level,
-            streak: data.user.streak || 1,
-            college: data.user.college || '',
-            state: data.user.state || '',
+            id: result.id,
+            name: result.name,
+            language: result.language,
+            llmProvider: result.llmProvider,
+            llmModel: result.llmModel,
+            hasApiKey: result.hasApiKey,
+            tier: result.tier as TierType,
+            xp: result.xp,
+            level: result.level,
+            streak: result.streak,
+            topicProgress: '{}',
+            badges: [],
             completedLabs: [],
             completedCTFs: [],
-            badges: data.user.badges || [],
-            certificates: [],
-            skills: data.user.skills || { networking: 0, webHacking: 0, linux: 0, crypto: 0, malware: 0 },
           },
-          assessment: {
-            currentQuestion: 0,
-            answers: {},
-            completed: true,
-            tier: data.tier as TierType,
-          },
-          currentView: 'dashboard',
         })
       }
+      return result.id
     } catch (error) {
-      console.error('Assessment API error, falling back to local:', error)
-      // Fallback to local calculation
-      let score = 0
-      const q = [
-        [0],[1],[0],[2],[1],[1],[1],[2],[0],[1]
-      ]
-      for (const [correct] of q) {
-        if (answers[q.indexOf([correct])] === correct) score++
-      }
-      // Simple local fallback
-      let tier: TierType = 'egg'
-      if (score >= 9) tier = 'burn'
-      else if (score >= 7) tier = 'soar'
-      else if (score >= 5) tier = 'fly'
-      else if (score >= 3) tier = 'hatch'
-
-      set({
-        user: {
-          ...get().user,
-          name,
-          tier,
-          badges: ['first-login', 'assessment-complete'],
-        },
-        assessment: { currentQuestion: 0, answers: {}, completed: true, tier },
-        currentView: 'dashboard',
-      })
+      console.error('Save profile error:', error)
+      return null
     }
   },
 
-  // Lab completion — calls real API
-  completeLab: async (labId, xp) => {
-    const { userId } = get()
-    if (!userId) return
-
-    try {
-      const progress = get().labProgress[labId]
-      const res = await fetch('/api/labs/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          labId,
-          xpEarned: xp,
-          hintsUsed: progress?.hintsUsed || 0,
-          stepsCompleted: progress?.currentStep || 0,
-        }),
-      })
-      const data = await res.json()
-
-      if (data.success && !data.alreadyCompleted) {
-        set((s) => ({
-          user: {
-            ...s.user,
-            completedLabs: s.user.completedLabs.includes(labId)
-              ? s.user.completedLabs
-              : [...s.user.completedLabs, labId],
-            xp: data.newXp ?? s.user.xp + xp,
-            level: data.newLevel ?? calcLevel(s.user.xp + xp),
-            badges: data.badges ?? s.user.badges,
-          },
-          labProgress: {
-            ...s.labProgress,
-            [labId]: { ...(s.labProgress[labId] || { labId, currentStep: 0, hintsUsed: 0, completed: false }), completed: true },
-          },
-        }))
-      }
-    } catch (error) {
-      console.error('Lab complete API error, falling back to local:', error)
-      set((s) => ({
-        user: {
-          ...s.user,
-          completedLabs: s.user.completedLabs.includes(labId)
-            ? s.user.completedLabs
-            : [...s.user.completedLabs, labId],
-          xp: s.user.xp + xp,
-          level: calcLevel(s.user.xp + xp),
-        },
-      }))
-    }
-  },
-
-  // CTF flag submission — calls real API
-  submitCTFFlag: async (challengeId, flag) => {
-    const { userId } = get()
-    if (!userId) return { correct: false, message: 'Not logged in' }
-
-    try {
-      const res = await fetch('/api/ctf/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, challengeId, submittedFlag: flag }),
-      })
-      const data = await res.json()
-
-      if (data.correct && !data.alreadySolved) {
-        set((s) => ({
-          user: {
-            ...s.user,
-            completedCTFs: s.user.completedCTFs.includes(challengeId)
-              ? s.user.completedCTFs
-              : [...s.user.completedCTFs, challengeId],
-            xp: data.newXp ?? s.user.xp + (data.points || 0),
-            level: data.newLevel ?? calcLevel(s.user.xp + (data.points || 0)),
-            badges: data.badges ?? s.user.badges,
-          },
-        }))
-      }
-
-      return { correct: data.correct, points: data.points, message: data.message, newBadges: data.badges }
-    } catch (error) {
-      console.error('CTF submit API error:', error)
-      return { correct: false, message: 'Failed to submit. Try again.' }
-    }
-  },
-
-  // Chat — calls real AI API
   sendMessage: async (content) => {
-    const { userId, chat, user } = get()
+    const { userId, chatMessages } = get()
 
-    // Add user message locally
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
       content,
       timestamp: new Date(),
     }
-    set((s) => ({
-      chat: { ...s.chat, messages: [...s.chat.messages, userMsg] },
-    }))
+    set((s) => ({ chatMessages: [...s.chatMessages, userMsg], isStreaming: true, streamContent: '' }))
 
     try {
+      const allMessages = [...chatMessages, userMsg]
       const res = await fetch('/api/guru', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: content,
+          messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
           userId,
-          language: chat.language,
-          chatHistory: chat.messages.slice(-10),
+        }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.message || 'Failed to send message')
+      }
+
+      const contentType = res.headers.get('content-type') || ''
+
+      // Check if streaming
+      if (contentType.includes('text/event-stream')) {
+        let fullContent = ''
+        const reader = res.body?.getReader()
+        const decoder = new TextDecoder()
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value, { stream: true })
+            const lines = chunk.split('\n').filter((line) => line.startsWith('data: '))
+
+            for (const line of lines) {
+              const data = line.slice(6)
+              if (data === '[DONE]') continue
+
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.error) {
+                  fullContent = `⚠️ ${parsed.message || 'Error from LLM provider'}`
+                  break
+                }
+                if (parsed.content) {
+                  fullContent += parsed.content
+                  set({ streamContent: fullContent })
+                }
+              } catch {
+                // skip
+              }
+            }
+          }
+          reader.releaseLock()
+        }
+
+        const guruMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: fullContent || 'No response received.',
+          timestamp: new Date(),
+        }
+        set((s) => ({
+          chatMessages: [...s.chatMessages, guruMsg],
+          isStreaming: false,
+          streamContent: '',
+        }))
+
+        // Check for lab/CTF JSON in the response
+        parseStructuredContent(fullContent, set, get)
+      } else {
+        // Non-streaming fallback
+        const data = await res.json()
+        if (data.error) {
+          const errorMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `⚠️ ${data.message || 'Something went wrong'}`,
+            timestamp: new Date(),
+          }
+          set((s) => ({ chatMessages: [...s.chatMessages, errorMsg], isStreaming: false, streamContent: '' }))
+          return
+        }
+
+        const content = data.content || data.message || 'No response received.'
+        const guruMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content,
+          timestamp: new Date(),
+        }
+        set((s) => ({ chatMessages: [...s.chatMessages, guruMsg], isStreaming: false, streamContent: '' }))
+
+        parseStructuredContent(content, set, get)
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error.message : 'Failed to send message'
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `⚠️ ${err}`,
+        timestamp: new Date(),
+      }
+      set((s) => ({ chatMessages: [...s.chatMessages, errorMsg], isStreaming: false, streamContent: '' }))
+    }
+  },
+
+  clearChat: () => set({ chatMessages: [] }),
+
+  loadChatHistory: async () => {
+    const { userId } = get()
+    if (!userId) return
+    try {
+      const res = await fetch(`/api/profile?id=${userId}`)
+      if (res.ok) {
+        const data = await res.json()
+        const msgs = (data.recentMessages || []).map((m: { role: string; content: string; createdAt: string; id: string }) => ({
+          id: m.id,
+          role: (m.role === 'guru' ? 'assistant' : m.role) as 'user' | 'assistant',
+          content: m.content,
+          timestamp: new Date(m.createdAt),
+        }))
+        set({ chatMessages: msgs })
+      }
+    } catch {
+      // ignore
+    }
+  },
+
+  setCurrentLab: (lab) => set({ currentLab: lab, currentView: lab ? 'lab' : 'dashboard' }),
+  setCurrentCTF: (ctf) => set({ currentCTF: ctf, currentView: ctf ? 'arena' : 'dashboard' }),
+
+  completeLab: async (hintsUsed) => {
+    const { userId, currentLab } = get()
+    if (!userId || !currentLab) return
+    try {
+      await fetch('/api/labs/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          labTitle: currentLab.title,
+          difficulty: currentLab.difficulty,
+          xpEarned: currentLab.xpReward,
+          hintsUsed,
+          topic: currentLab.title.toLowerCase().replace(/\s+/g, '_'),
+        }),
+      })
+      await get().refreshUser()
+    } catch (error) {
+      console.error('Complete lab error:', error)
+    }
+  },
+
+  submitCTFFlag: async (flag) => {
+    const { userId, currentCTF } = get()
+    if (!userId || !currentCTF) return { correct: false, message: 'No active challenge' }
+
+    try {
+      const res = await fetch('/api/ctf/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          challengeTitle: currentCTF.title,
+          submittedFlag: flag,
+          expectedFlag: currentCTF.flag,
+          category: currentCTF.category,
+          difficulty: currentCTF.difficulty,
+          points: currentCTF.points,
         }),
       })
       const data = await res.json()
 
-      const guruMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'guru',
-        content: data.content,
-        timestamp: new Date(data.timestamp || new Date().toISOString()),
+      if (data.correct) {
+        await get().refreshUser()
       }
-      set((s) => ({
-        chat: { ...s.chat, messages: [...s.chat.messages, guruMsg] },
-      }))
-    } catch (error) {
-      console.error('Guru API error:', error)
-      const fallbackMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'guru',
-        content: "I'm having trouble connecting right now. The Vaathi servers might be busy — try again in a moment! 🛡️",
-        timestamp: new Date(),
+
+      return {
+        correct: data.correct,
+        message: data.message,
+        points: data.points,
+        tierChanged: data.tierChanged,
+        newBadges: data.newBadges,
       }
-      set((s) => ({
-        chat: { ...s.chat, messages: [...s.chat.messages, fallbackMsg] },
-      }))
+    } catch {
+      return { correct: false, message: 'Failed to submit. Try again.' }
     }
   },
 
-  // Local-only actions
-  addGuruMessageLocal: (content) =>
-    set((s) => ({
-      chat: {
-        ...s.chat,
-        messages: [...s.chat.messages, { id: Date.now().toString(), role: 'guru', content, timestamp: new Date() }],
-      },
-    })),
-
-  selectLab: (labId) =>
-    set({ selectedLab: labId, currentView: labId ? 'lab-detail' : 'labs' }),
-
-  updateLabStep: (labId, step) =>
-    set((s) => ({
-      labProgress: {
-        ...s.labProgress,
-        [labId]: {
-          ...(s.labProgress[labId] || { labId, currentStep: 0, hintsUsed: 0, completed: false }),
-          currentStep: step,
-        },
-      },
-    })),
-
-  spendHint: (labId) =>
-    set((s) => ({
-      labProgress: {
-        ...s.labProgress,
-        [labId]: {
-          ...(s.labProgress[labId] || { labId, currentStep: 0, hintsUsed: 0, completed: false }),
-          hintsUsed: (s.labProgress[labId]?.hintsUsed || 0) + 1,
-        },
-      },
-    })),
-
-  setChatLanguage: (lang) =>
-    set((s) => ({ chat: { ...s.chat, language: lang } })),
-
-  setUser: (userData) =>
-    set((s) => ({
-      user: { ...s.user, ...userData },
-      userId: (userData as { id?: string }).id || s.userId,
-    })),
+  refreshUser: async () => {
+    const { userId } = get()
+    if (!userId) return
+    try {
+      const res = await fetch(`/api/profile?id=${userId}`)
+      if (res.ok) {
+        const data = await res.json()
+        set((s) => ({
+          user: s.user ? {
+            ...s.user,
+            xp: data.xp,
+            level: data.level,
+            tier: data.tier as TierType,
+            streak: data.streak,
+            badges: data.badges || [],
+            completedLabs: data.completedLabs || [],
+            completedCTFs: data.completedCTFs || [],
+            topicProgress: data.topicProgress || '{}',
+          } : s.user,
+        }))
+      }
+    } catch {
+      // ignore
+    }
+  },
 }))
+
+// Parse lab/CTF JSON from AI response
+function parseStructuredContent(content: string, set: (fn: (s: VaathiState) => Partial<VaathiState>) => void, get: () => VaathiState) {
+  // Try to find JSON blocks
+  const jsonBlockRegex = /```json\s*\n?([\s\S]*?)\n?```/g
+  let match
+
+  while ((match = jsonBlockRegex.exec(content)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1])
+      if (parsed.type === 'lab' && parsed.title && parsed.flag) {
+        set({ currentLab: parsed as LabData, currentView: 'lab' })
+        return
+      }
+      if (parsed.type === 'ctf' && parsed.title && parsed.flag) {
+        set({ currentCTF: parsed as CTFData, currentView: 'arena' })
+        return
+      }
+    } catch {
+      // Not valid JSON, continue
+    }
+  }
+}
 
 // Helper hooks
 export const useXPProgress = () => {
-  const xp = useVaathiStore((s) => s.user.xp)
-  const level = useVaathiStore((s) => s.user.level)
-  const xpInLevel = xp - (level - 1) * 1000
-  const xpForNext = 1000
+  const xp = useVaathiStore((s) => s.user?.xp ?? 0)
+  const level = useVaathiStore((s) => s.user?.level ?? 1)
+  const xpForNext = 100
+  const xpInLevel = xp - (level - 1) * xpForNext
   return { xp, level, xpInLevel, xpForNext, progress: (xpInLevel / xpForNext) * 100 }
 }
 
-export const TIER_CONFIG: Record<TierType, { emoji: string; label: string; color: string; desc: string }> = {
-  egg: { emoji: '🥚', label: 'Egg', color: '#94a3b8', desc: 'Never touched a terminal' },
-  hatch: { emoji: '🐣', label: 'Hatch', color: '#22c55e', desc: 'Knows basics, wrote some code' },
-  fly: { emoji: '🐦', label: 'Fly', color: '#06b6d4', desc: 'Comfortable with Linux, networking' },
-  soar: { emoji: '🦅', label: 'Soar', color: '#a855f7', desc: 'Has done CTFs, knows exploits' },
-  burn: { emoji: '🔥', label: 'Burn', color: '#f59e0b', desc: 'Reverse engineering, 0-days territory' },
+export const TIER_CONFIG: Record<TierType, { emoji: string; label: string; color: string; desc: string; minXp: number }> = {
+  egg: { emoji: '🥚', label: 'Egg', color: '#94a3b8', desc: 'Just starting out', minXp: 0 },
+  hatchling: { emoji: '🐣', label: 'Hatchling', color: '#22c55e', desc: 'Learning the basics', minXp: 100 },
+  script_kiddie: { emoji: '💻', label: 'Script Kiddie', color: '#06b6d4', desc: 'Running scripts like a pro', minXp: 500 },
+  hacker: { emoji: '🖥️', label: 'Hacker', color: '#a855f7', desc: 'Understanding systems deeply', minXp: 2000 },
+  burn: { emoji: '🔥', label: 'Burn', color: '#f59e0b', desc: 'Elite — can mentor others', minXp: 5000 },
 }
+
+export const LANGUAGES = [
+  { code: 'english', label: 'English', flag: '🇬🇧' },
+  { code: 'tamil', label: 'Tamil', flag: '🇮🇳' },
+  { code: 'hindi', label: 'Hindi', flag: '🇮🇳' },
+  { code: 'telugu', label: 'Telugu', flag: '🇮🇳' },
+  { code: 'malayalam', label: 'Malayalam', flag: '🇮🇳' },
+  { code: 'kannada', label: 'Kannada', flag: '🇮🇳' },
+] as const
+
+export const LLM_PROVIDERS = [
+  { id: 'groq', label: 'Groq', url: 'https://api.groq.com/openai/v1', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'] },
+  { id: 'openai', label: 'OpenAI', url: 'https://api.openai.com/v1', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'] },
+  { id: 'together', label: 'Together AI', url: 'https://api.together.xyz/v1', models: ['meta-llama/Llama-3-70b-chat-hf', 'mistralai/Mixtral-8x7B-Instruct-v0.1'] },
+  { id: 'ollama', label: 'Ollama (Local)', url: 'http://localhost:11434/v1', models: ['llama3', 'mistral', 'codellama', 'gemma2'] },
+  { id: 'custom', label: 'Custom (OpenAI-compatible)', url: '', models: [] },
+] as const

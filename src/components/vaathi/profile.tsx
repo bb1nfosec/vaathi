@@ -1,353 +1,426 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { useVaathiStore, useXPProgress, TIER_CONFIG } from '@/store/vaathi-store'
-import { badgeDefinitions, labs } from '@/lib/vaathi-data'
+import { useVaathiStore, LANGUAGES, LLM_PROVIDERS } from '@/store/vaathi-store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Separator } from '@/components/ui/separator'
 import {
   User,
-  Zap,
-  Star,
-  Trophy,
-  Target,
-  Flame,
-  BookOpen,
-  Shield,
-  Globe,
-  Terminal,
-  Lock,
   Key,
-  Bug,
-  Landmark,
-  Award,
-  TrendingUp,
+  Languages,
+  Save,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  Shield,
+  Trash2,
+  Brain,
+  Trophy,
+  Swords,
+  Check,
 } from 'lucide-react'
 
-const skillNodes = [
-  { id: 'networking', label: 'Networking', icon: Globe, color: '#22c55e', tier: 'egg' },
-  { id: 'webHacking', label: 'Web Hacking', icon: Terminal, color: '#06b6d4', tier: 'hatch' },
-  { id: 'linux', label: 'Linux & Terminal', icon: Terminal, color: '#f59e0b', tier: 'hatch' },
-  { id: 'crypto', label: 'Cryptography', icon: Key, color: '#a855f7', tier: 'fly' },
-  { id: 'malware', label: 'Malware Analysis', icon: Bug, color: '#ef4444', tier: 'soar' },
-]
-
 export default function Profile() {
-  const { user } = useVaathiStore()
-  const { level, xp, progress } = useXPProgress()
-  const tierConfig = TIER_CONFIG[user.tier]
+  const { user, setView, saveProfile, refreshUser, initSession } = useVaathiStore()
+  const [name, setName] = useState(user?.name || '')
+  const [language, setLanguage] = useState(user?.language || 'english')
+  const [llmProvider, setLlmProvider] = useState(user?.llmProvider || 'groq')
+  const [llmApiKey, setLlmApiKey] = useState('')
+  const [llmModel, setLlmModel] = useState(user?.llmModel || '')
+  const [llmBaseUrl, setLlmBaseUrl] = useState('')
+  const [showKey, setShowKey] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
-  const totalLabsCompleted = user.completedLabs.length
-  const totalCTFsSolved = user.completedCTFs.length
-  const totalBadges = user.badges.length
+  // Derive initial values from user — updated on each render
+  const displayName = name || user?.name || ''
+  const displayLanguage = language || user?.language || 'english'
+  const displayProvider = llmProvider || user?.llmProvider || 'groq'
+  const displayModel = llmModel || user?.llmModel || ''
 
-  // Activity heatmap data (simplified)
-  const heatmapData = user.activityLog.slice(-28)
+  const currentProvider = LLM_PROVIDERS.find((p) => p.id === displayProvider)
+  const models = currentProvider?.models || []
+
+  const handleSave = async () => {
+    if (!name.trim()) return
+    setIsSaving(true)
+    setSaveMsg(null)
+    await saveProfile({
+      name: name.trim(),
+      language,
+      llmProvider,
+      llmApiKey: llmApiKey.trim(),
+      llmModel: llmModel.trim(),
+      llmBaseUrl: llmBaseUrl.trim(),
+    })
+    await refreshUser()
+    setIsSaving(false)
+    setSaveMsg('Profile saved!')
+    setLlmApiKey('')
+    setTimeout(() => setSaveMsg(null), 3000)
+  }
+
+  const handleReset = async () => {
+    localStorage.removeItem('vaathi_userId')
+    window.location.href = '/'
+  }
+
+  if (!user) return null
 
   return (
-    <div className="min-h-screen pt-24 pb-8 px-4">
-      <div className="max-w-5xl mx-auto">
-        {/* Profile Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <Card className="bg-white/[0.02] border-cyber-border overflow-hidden relative">
-            <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-r from-neon/10 via-cyan-500/5 to-purple-500/10" />
-            <CardContent className="p-8 relative z-10">
-              <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6">
-                <Avatar className="w-24 h-24 border-4 border-cyber-dark shrink-0">
-                  <AvatarFallback className="bg-neon/10 text-neon text-2xl font-bold">
-                    {user.name.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="text-center sm:text-left flex-1">
-                  <h1 className="text-2xl sm:text-3xl font-bold">{user.name}</h1>
-                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-2">
-                    <Badge
-                      variant="outline"
-                      className="text-sm px-3 py-1"
-                      style={{ borderColor: tierConfig.color, color: tierConfig.color }}
-                    >
-                      {tierConfig.emoji} {tierConfig.label} Tier
-                    </Badge>
-                    <Badge variant="outline" className="text-sm px-3 py-1 border-cyber-border">
-                      Level {level}
-                    </Badge>
-                    <Badge variant="outline" className="text-sm px-3 py-1 border-amber-500/30 text-amber-400">
-                      <Flame className="w-3 h-3 mr-1" />
-                      {user.streak}-day streak
-                    </Badge>
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-neon">{xp.toLocaleString()}</div>
-                  <div className="text-sm text-muted-foreground">Total XP</div>
-                  <div className="mt-2 w-32">
-                    <Progress value={progress} className="h-2" />
-                    <p className="text-[10px] text-muted-foreground mt-1 text-right font-mono">
-                      Next level: {(level) * 1000} XP
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+    <div className="min-h-screen pt-20 pb-8 px-4">
+      <div className="max-w-3xl mx-auto">
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => setView('dashboard')} className="text-muted-foreground">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="text-lg font-bold">Profile & Settings</h1>
         </motion.div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left Column */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Skill Tree */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card className="bg-white/[0.02] border-cyber-border">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Target className="w-5 h-5 text-neon" />
-                    Skill Tree
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <div className="space-y-4">
-                    {skillNodes.map((node, i) => {
-                      const skillValue = user.skills[node.id as keyof typeof user.skills]
-                      const isUnlocked = skillValue > 0
-                      return (
-                        <motion.div
-                          key={node.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.1 }}
-                          className="flex items-center gap-4 p-4 rounded-xl border transition-colors"
-                          style={{
-                            borderColor: isUnlocked ? `${node.color}30` : 'transparent',
-                            backgroundColor: isUnlocked ? `${node.color}05` : 'rgba(255,255,255,0.01)',
-                          }}
-                        >
-                          {/* Connection line */}
-                          <div className="flex flex-col items-center">
-                            <div
-                              className="w-12 h-12 rounded-xl flex items-center justify-center border-2"
-                              style={{
-                                borderColor: isUnlocked ? node.color : '#1e293b',
-                                backgroundColor: isUnlocked ? `${node.color}15` : 'rgba(255,255,255,0.02)',
-                              }}
-                            >
-                              <node.icon
-                                className="w-5 h-5"
-                                style={{ color: isUnlocked ? node.color : '#475569' }}
-                              />
-                            </div>
-                            {i < skillNodes.length - 1 && (
-                              <div className={`w-0.5 h-6 mt-1 ${isUnlocked ? 'bg-neon/20' : 'bg-white/5'}`} />
-                            )}
-                          </div>
+        <div className="space-y-6">
+          {/* User Info */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <Card className="bg-white/[0.02] border-cyber-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <User className="w-4 h-4 text-neon" />
+                  Personal Info
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="profile-name">Name</Label>
+                  <Input
+                    id="profile-name"
+                    value={displayName}
+                    onChange={(e) => setName(e.target.value)}
+                    className="mt-2 bg-white/5 border-cyber-border focus:border-neon"
+                  />
+                </div>
+                <div>
+                  <Label>Language</Label>
+                  <Select value={displayLanguage} onValueChange={setLanguage}>
+                    <SelectTrigger className="mt-2 bg-white/5 border-cyber-border">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGES.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.flag} {lang.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Guru will teach you in {LANGUAGES.find((l) => l.code === displayLanguage)?.label}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className={`text-sm font-semibold ${isUnlocked ? '' : 'text-muted-foreground'}`}>
-                                {node.label}
-                              </h3>
-                              {!isUnlocked && (
-                                <Lock className="w-3 h-3 text-muted-foreground" />
-                              )}
-                            </div>
-                            {isUnlocked && (
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
-                                  <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${skillValue}%` }}
-                                    transition={{ delay: 0.5 + i * 0.1, duration: 0.8 }}
-                                    className="h-full rounded-full"
-                                    style={{ backgroundColor: node.color }}
-                                  />
-                                </div>
-                                <span className="text-xs font-mono" style={{ color: node.color }}>
-                                  {skillValue}%
-                                </span>
-                              </div>
-                            )}
-                          </div>
+          {/* LLM Settings */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Card className="bg-white/[0.02] border-cyber-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Key className="w-4 h-4 text-amber-400" />
+                  LLM Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Current Status */}
+                <div className="flex items-center gap-2">
+                  {user.hasApiKey ? (
+                    <Badge className="bg-neon/10 text-neon border border-neon/30 gap-1">
+                      <Check className="w-3 h-3" />
+                      API Key Configured
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-amber-500/30 text-amber-400 gap-1">
+                      <Key className="w-3 h-3" />
+                      No API Key — Please add one
+                    </Badge>
+                  )}
+                </div>
 
-                          {/* Labs count */}
-                          {isUnlocked && (
-                            <div className="text-right shrink-0">
-                              <div className="text-xs text-muted-foreground">
-                                {labs.filter((l) => l.category === node.label.replace(' & Terminal', '')).length} labs
-                              </div>
-                            </div>
-                          )}
-                        </motion.div>
-                      )
-                    })}
+                <div>
+                  <Label>LLM Provider</Label>
+                  <Select value={displayProvider} onValueChange={(val) => {
+                    setLlmProvider(val)
+                    const provider = LLM_PROVIDERS.find((p) => p.id === val)
+                    if (provider && provider.models.length > 0) {
+                      setLlmModel(provider.models[0])
+                    }
+                  }}>
+                    <SelectTrigger className="mt-2 bg-white/5 border-cyber-border">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LLM_PROVIDERS.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="profile-api-key">API Key</Label>
+                  <div className="relative mt-2">
+                    <Input
+                      id="profile-api-key"
+                      type={showKey ? 'text' : 'password'}
+                      value={llmApiKey}
+                      onChange={(e) => setLlmApiKey(e.target.value)}
+                      placeholder={user.hasApiKey ? 'Leave blank to keep current key' : 'Enter your API key...'}
+                      className="bg-white/5 border-cyber-border focus:border-neon pr-10"
+                      disabled={llmProvider === 'ollama'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(!showKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  {llmProvider === 'ollama' && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Ollama runs locally — no API key needed.
+                    </p>
+                  )}
+                  {llmProvider === 'groq' && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Get a free API key at <span className="text-neon">console.groq.com</span>
+                    </p>
+                  )}
+                </div>
 
-            {/* Badges */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card className="bg-white/[0.02] border-cyber-border">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Star className="w-5 h-5 text-amber-400" />
-                    Badges ({totalBadges}/{badgeDefinitions.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {badgeDefinitions.map((badge, i) => {
-                      const isEarned = user.badges.includes(badge.id)
-                      return (
-                        <motion.div
-                          key={badge.id}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: i * 0.05 }}
-                          className={`p-4 rounded-xl border text-center transition-colors ${
-                            isEarned
-                              ? 'bg-white/[0.03] border-cyber-border'
-                              : 'bg-white/[0.01] border-cyber-border/50 opacity-40'
-                          }`}
-                        >
-                          <div className="text-2xl mb-2">{isEarned ? badge.icon : '🔒'}</div>
-                          <h4 className="text-xs font-semibold">{badge.name}</h4>
-                          <p className="text-[10px] text-muted-foreground mt-1">{badge.description}</p>
-                        </motion.div>
-                      )
-                    })}
+                {llmProvider === 'custom' && (
+                  <div>
+                    <Label htmlFor="profile-base-url">Custom Base URL</Label>
+                    <Input
+                      id="profile-base-url"
+                      type="url"
+                      value={llmBaseUrl}
+                      onChange={(e) => setLlmBaseUrl(e.target.value)}
+                      placeholder="https://your-provider.com/v1"
+                      className="mt-2 bg-white/5 border-cyber-border focus:border-neon"
+                    />
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
+                )}
 
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Stats Summary */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-            >
+                <div>
+                  <Label>Model</Label>
+                  {models.length > 0 ? (
+                    <Select value={displayModel} onValueChange={setLlmModel}>
+                      <SelectTrigger className="mt-2 bg-white/5 border-cyber-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {models.map((model) => (
+                          <SelectItem key={model} value={model}>
+                            {model}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={llmModel}
+                      onChange={(e) => setLlmModel(e.target.value)}
+                      placeholder="Enter model name..."
+                      className="mt-2 bg-white/5 border-cyber-border focus:border-neon font-mono text-sm"
+                    />
+                  )}
+                </div>
+
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving || !name.trim()}
+                  className="w-full gap-2 bg-neon text-cyber-dark hover:bg-neon/90"
+                >
+                  {isSaving ? 'Saving...' : <><Save className="w-4 h-4" /> Save Settings</>}
+                </Button>
+                {saveMsg && (
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center text-sm text-neon">
+                    {saveMsg}
+                  </motion.p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Stats */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <Card className="bg-white/[0.02] border-cyber-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Your Stats</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="text-center p-3 rounded-lg bg-white/[0.02] border border-cyber-border">
+                    <div className="text-xl font-bold text-neon">{user.xp}</div>
+                    <div className="text-xs text-muted-foreground">Total XP</div>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-white/[0.02] border border-cyber-border">
+                    <div className="text-xl font-bold text-amber-400">Lv.{user.level}</div>
+                    <div className="text-xs text-muted-foreground">Level</div>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-white/[0.02] border border-cyber-border">
+                    <div className="text-xl font-bold text-ice">{user.completedLabs.length}</div>
+                    <div className="text-xs text-muted-foreground">Labs Done</div>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-white/[0.02] border border-cyber-border">
+                    <div className="text-xl font-bold text-fire">{user.completedCTFs.length}</div>
+                    <div className="text-xs text-muted-foreground">CTFs Solved</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Badges */}
+          {user.badges.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
               <Card className="bg-white/[0.02] border-cyber-border">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-neon" />
-                    Statistics
-                  </CardTitle>
+                  <CardTitle className="text-sm">Badges ({user.badges.length})</CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <div className="space-y-3">
-                    {[
-                      { label: 'Labs Completed', value: totalLabsCompleted, icon: BookOpen, color: '#22c55e' },
-                      { label: 'CTFs Solved', value: totalCTFsSolved, icon: Trophy, color: '#f59e0b' },
-                      { label: 'Badges Earned', value: totalBadges, icon: Star, color: '#a855f7' },
-                      { label: 'Current Level', value: level, icon: Zap, color: '#06b6d4' },
-                      { label: 'Day Streak', value: user.streak, icon: Flame, color: '#ef4444' },
-                    ].map((stat) => (
-                      <div key={stat.label} className="flex items-center gap-3 p-2 rounded-lg">
-                        <div
-                          className="w-8 h-8 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: `${stat.color}15` }}
-                        >
-                          <stat.icon className="w-4 h-4" style={{ color: stat.color }} />
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-xs text-muted-foreground">{stat.label}</div>
-                        </div>
-                        <span className="font-bold font-mono">{stat.value}</span>
+                <CardContent>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {user.badges.map((badge) => (
+                      <div key={badge.id} className="flex flex-col items-center p-3 rounded-lg bg-white/[0.02] border border-cyber-border">
+                        <span className="text-2xl">{badge.emoji}</span>
+                        <span className="text-[10px] text-center mt-1 text-foreground/80">{badge.name}</span>
                       </div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
+          )}
 
-            {/* Activity Heatmap */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-            >
+          {/* Completed Labs */}
+          {user.completedLabs.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
               <Card className="bg-white/[0.02] border-cyber-border">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-neon" />
-                    Activity (Last 28 Days)
+                    <Swords className="w-4 h-4 text-ice" />
+                    Completed Labs ({user.completedLabs.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <div className="grid grid-cols-7 gap-1">
-                    {heatmapData.map((day, i) => {
-                      const intensity = day.xp > 150 ? 4 : day.xp > 100 ? 3 : day.xp > 50 ? 2 : day.xp > 0 ? 1 : 0
-                      const colors = ['bg-white/5', 'bg-neon/20', 'bg-neon/40', 'bg-neon/60', 'bg-neon/80']
-                      return (
-                        <div
-                          key={i}
-                          className={`w-full aspect-square rounded-sm ${colors[intensity]} transition-colors`}
-                          title={`${day.date}: ${day.xp} XP`}
-                        />
-                      )
-                    })}
-                  </div>
-                  <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
-                    <span>Less</span>
-                    <div className="flex gap-1">
-                      {['bg-white/5', 'bg-neon/20', 'bg-neon/40', 'bg-neon/60', 'bg-neon/80'].map((c, i) => (
-                        <div key={i} className={`w-3 h-3 rounded-sm ${c}`} />
-                      ))}
-                    </div>
-                    <span>More</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Achievements to Unlock */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="bg-white/[0.02] border-cyber-border">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" />
-                    Next Milestones
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0 space-y-3">
-                  {[
-                    { label: 'Complete 5 Labs', progress: Math.min(100, (totalLabsCompleted / 5) * 100) },
-                    { label: 'Solve 3 CTFs', progress: Math.min(100, (totalCTFsSolved / 3) * 100) },
-                    { label: 'Reach Level 5', progress: Math.min(100, (level / 5) * 100) },
-                    { label: 'Earn 10 Badges', progress: Math.min(100, (totalBadges / 10) * 100) },
-                  ].map((milestone) => (
-                    <div key={milestone.label}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-muted-foreground">{milestone.label}</span>
-                        <span className="text-[10px] font-mono text-neon">{Math.round(milestone.progress)}%</span>
+                <CardContent>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {user.completedLabs.map((lab) => (
+                      <div key={lab.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02]">
+                        <span className="text-sm">🧪</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{lab.labTitle}</div>
+                          <div className="text-xs text-muted-foreground">+{lab.xpEarned} XP</div>
+                        </div>
                       </div>
-                      <Progress value={milestone.progress} className="h-1.5" />
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
-          </div>
+          )}
+
+          {/* Completed CTFs */}
+          {user.completedCTFs.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+              <Card className="bg-white/[0.02] border-cyber-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-fire" />
+                    Solved CTFs ({user.completedCTFs.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {user.completedCTFs.map((ctf) => (
+                      <div key={ctf.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02]">
+                        <span className="text-sm">🏴</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{ctf.challengeTitle}</div>
+                          <div className="text-xs text-muted-foreground">{ctf.category} &bull; +{ctf.pointsEarned} XP</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          <Separator className="bg-cyber-border" />
+
+          {/* Danger Zone */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+            <Card className="bg-destructive/5 border-destructive/20">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-destructive flex items-center gap-2">
+                  <Trash2 className="w-4 h-4" />
+                  Danger Zone
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground mb-3">
+                  This will clear all your progress, badges, and chat history. This cannot be undone.
+                </p>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" className="gap-2">
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Reset All Progress
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete your account data including all badges, completed labs, CTFs, and chat history. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleReset} className="bg-destructive text-white hover:bg-destructive/90">
+                        Yes, reset everything
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
       </div>
     </div>

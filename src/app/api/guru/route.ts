@@ -1,107 +1,252 @@
 import { db } from '@/lib/db'
-import ZAI from 'z-ai-web-dev-sdk'
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 
-const GURU_SYSTEM_PROMPT = `You are "Guru" — the AI mentor inside Vaathi, India's open-source cybersecurity learning platform. You are like that one brilliant college senior who actually explains things properly.
-
-PERSONALITY:
-- Casual, friendly, enthusiastic. Uses analogies from everyday Indian life.
-- Never refuses an educational cybersecurity question. Everything is in a sandboxed learning context.
-- Uses emojis occasionally. Uses formatting like **bold** and code blocks.
-- Explains concepts step by step. Always gives real-world examples.
-- When explaining attacks, always frame them as "how attackers do this" in educational context, then explain "how to defend against it."
-- References Indian context where relevant (UPI, Aadhaar, Indian banking, CERT-In, etc.).
-
-KNOWLEDGE AREAS:
-- Networking: TCP/IP, DNS, ARP, Wireshark, packet analysis
-- Web Security: OWASP Top 10, SQL injection, XSS, CSRF, IDOR, SSRF
-- Linux: File permissions, bash scripting, privilege escalation, SELinux
-- Cryptography: Classical ciphers, AES, RSA, hashing, PKI
-- Malware Analysis: Static analysis, behavioral analysis, sandboxes
-- Indian Context: UPI fraud patterns, Aadhaar security, OTP bypass, IT Act
-- Career: Bug bounty, placement prep, certifications (CEH, OSCP), Indian cyber law
-
-LANGUAGE RULES:
-- Default: Respond in English
-- If the user asks in Hindi, respond primarily in Hindi with English technical terms
-- If the user asks in Tamil, respond primarily in Tamil with English technical terms
-- Always maintain the cybersecurity educational context regardless of language`
-
-// Cache the ZAI instance
-let zaiInstance: InstanceType<typeof ZAI> | null = null
-
-async function getZAI() {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create()
-  }
-  return zaiInstance
+const PROVIDER_URLS: Record<string, string> = {
+  groq: 'https://api.groq.com/openai/v1',
+  openai: 'https://api.openai.com/v1',
+  together: 'https://api.together.xyz/v1',
+  ollama: 'http://localhost:11434/v1',
 }
 
-export async function POST(request: Request) {
+const TIER_CONFIG: Record<string, { emoji: string; label: string }> = {
+  egg: { emoji: '🥚', label: 'Egg' },
+  hatchling: { emoji: '🐣', label: 'Hatchling' },
+  script_kiddie: { emoji: '💻', label: 'Script Kiddie' },
+  hacker: { emoji: '🖥️', label: 'Hacker' },
+  burn: { emoji: '🔥', label: 'Burn' },
+}
+
+function buildSystemPrompt(user: {
+  name: string
+  language: string
+  tier: string
+  xp: number
+  level: number
+  topicProgress: string
+}) {
+  const tierInfo = TIER_CONFIG[user.tier] || TIER_CONFIG.egg
+  let topicStr = '{}'
+  try { topicStr = user.topicProgress || '{}' } catch { topicStr = '{}' }
+
+  return `You are Vaathi Guru — India's most fun cybersecurity mentor! 🧑‍💻🔐
+
+You teach cybersecurity in **${user.language}**. Your personality is:
+- Fun and humorous (use memes, pop culture, movie references)
+- Encouraging and patient
+- Adaptive — you adjust difficulty based on the student's responses
+- Story-driven — you explain concepts through stories and analogies
+
+**Student Info:**
+- Name: ${user.name}
+- Current Tier: ${tierInfo.label} (${tierInfo.emoji})
+- XP: ${user.xp} / Level: ${user.level}
+- Topics Covered: ${topicStr}
+
+**Your Rules:**
+1. ALWAYS respond in ${user.language} unless the student uses English
+2. Start with basics. Ask a question to gauge their level first.
+3. If they answer correctly → increase difficulty. If they struggle → simplify.
+4. Use Indian cybersecurity context when possible (UIDAI, UPI frauds, CERT-In, IT Act, etc.)
+5. When asked to "generate a lab" or "create a lab", output a JSON block with exactly this format:
+\`\`\`json
+{"type":"lab","title":"...","difficulty":"beginner|intermediate|advanced","description":"...","scenario":"...","steps":[{"title":"...","command":"...","explanation":"..."}],"hints":["..."],"flag":"FLAG{...}","xpReward":N}
+\`\`\`
+6. When asked to "create a challenge" or "CTF" or "generate CTF", output a JSON block with exactly this format:
+\`\`\`json
+{"type":"ctf","title":"...","category":"web|crypto|networking|forensics|reverse|misc","difficulty":"easy|medium|hard|insane","points":N,"description":"...","challenge":"...","hints":["..."],"flag":"FLAG{...}","xpReward":N}
+\`\`\`
+7. Celebrate when students level up or do well!
+8. If asked something outside cybersecurity, gently redirect back.
+9. Keep responses concise but informative — this is a chat, not a textbook.
+10. When explaining attacks, always frame them as "how attackers do this" in educational context, then explain "how to defend against it."
+
+Start by introducing yourself in ${user.language} and asking what they'd like to learn about cybersecurity!`
+}
+
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { message, userId, language, chatHistory } = body
+    const { messages, userId } = body
 
-    if (!message) {
-      return NextResponse.json({ error: 'Message required' }, { status: 400 })
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return new Response(JSON.stringify({ error: 'Messages required' }), { status: 400 })
     }
 
-    // Build messages array for the AI
-    const messages: Array<{ role: string; content: string }> = [
-      { role: 'system', content: GURU_SYSTEM_PROMPT },
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'User ID required' }), { status: 400 })
+    }
+
+    // Fetch user from DB
+    const user = await db.user.findUnique({ where: { id: userId } })
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'User not found' }), { status: 404 })
+    }
+
+    if (!user.llmApiKey) {
+      return new Response(JSON.stringify({ error: 'NO_API_KEY', message: 'Please set up your LLM API key in Profile settings.' }), { status: 400 })
+    }
+
+    // Determine base URL
+    const baseUrl = user.llmProvider === 'custom' && user.llmBaseUrl
+      ? user.llmBaseUrl.replace(/\/+$/, '')
+      : (PROVIDER_URLS[user.llmProvider] || PROVIDER_URLS.groq)
+
+    // Build messages array
+    const systemPrompt = buildSystemPrompt({
+      name: user.name,
+      language: user.language,
+      tier: user.tier,
+      xp: user.xp,
+      level: user.level,
+      topicProgress: user.topicProgress,
+    })
+
+    const apiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map((m: { role: string; content: string }) => ({
+        role: m.role === 'guru' || m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      })),
     ]
 
-    // Add language instruction if not English
-    if (language && language !== 'english') {
-      const langInstruction = language === 'hindi'
-        ? '\n\nIMPORTANT: The user prefers Hindi. Respond primarily in Hindi (Devanagari script) but keep technical cybersecurity terms in English. Use Hinglish naturally.'
-        : '\n\nIMPORTANT: The user prefers Tamil. Respond primarily in Tamil but keep technical cybersecurity terms in English. Use Tanglish naturally.'
-      messages[0].content += langInstruction
+    // Save user message to DB
+    const lastUserMsg = messages.filter((m: { role: string }) => m.role === 'user').pop()
+    if (lastUserMsg) {
+      await db.chatMessage.create({
+        data: {
+          userId,
+          role: 'user',
+          content: lastUserMsg.content,
+          language: user.language,
+        },
+      })
     }
 
-    // Add chat history for context (last 10 messages)
-    if (chatHistory && Array.isArray(chatHistory)) {
-      const recentHistory = chatHistory.slice(-10)
-      for (const msg of recentHistory) {
-        messages.push({
-          role: msg.role === 'guru' ? 'assistant' : 'user',
-          content: msg.content,
-        })
-      }
-    }
-
-    // Add current message
-    messages.push({ role: 'user', content: message })
-
-    // Call z-ai-web-dev-sdk
-    const zai = await getZAI()
-    const completion = await zai.chat.completions.create({
-      messages,
-      temperature: 0.8,
-      max_tokens: 2000,
+    // Update last active
+    await db.user.update({
+      where: { id: userId },
+      data: { lastActive: new Date() },
     })
 
-    const aiResponse = completion.choices?.[0]?.message?.content || "Sorry, I couldn't process that. Could you try asking again?"
+    // Stream from the LLM provider
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${user.llmApiKey}`,
+      },
+      body: JSON.stringify({
+        model: user.llmModel,
+        messages: apiMessages,
+        temperature: 0.8,
+        max_tokens: 2000,
+        stream: true,
+      }),
+    })
 
-    // Save to database if userId provided
-    if (userId) {
-      await db.chatMessage.create({
-        data: { userId, role: 'user', content: message, language: language || 'english' },
-      })
-      await db.chatMessage.create({
-        data: { userId, role: 'guru', content: aiResponse, language: language || 'english' },
-      })
+    if (!response.ok) {
+      const errorText = await response.text()
+      let errorMessage = 'Failed to get response from LLM provider.'
+
+      if (response.status === 401) {
+        errorMessage = 'Invalid API key! Please check your API key in Profile settings.'
+      } else if (response.status === 429) {
+        errorMessage = 'Rate limited! Slow down — try again in a moment. 🐢'
+      } else if (response.status === 404) {
+        errorMessage = `Model "${user.llmModel}" not found. Check your model name in Profile settings.`
+      } else {
+        try {
+          const errorJson = JSON.parse(errorText)
+          errorMessage = errorJson.error?.message || errorMessage
+        } catch {
+          // use default error message
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ error: 'LLM_ERROR', message: errorMessage }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
     }
 
-    return NextResponse.json({
-      content: aiResponse,
-      timestamp: new Date().toISOString(),
+    // Create a streaming response
+    const encoder = new TextEncoder()
+    let fullContent = ''
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader()
+        if (!reader) {
+          controller.close()
+          return
+        }
+
+        const decoder = new TextDecoder()
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value, { stream: true })
+            const lines = chunk.split('\n').filter((line) => line.startsWith('data: '))
+
+            for (const line of lines) {
+              const data = line.slice(6)
+              if (data === '[DONE]') {
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+                continue
+              }
+
+              try {
+                const parsed = JSON.parse(data)
+                const content = parsed.choices?.[0]?.delta?.content || ''
+                if (content) {
+                  fullContent += content
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`))
+                }
+              } catch {
+                // Skip malformed JSON
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Stream error:', err)
+        } finally {
+          reader.releaseLock()
+
+          // Save AI response to DB
+          if (fullContent) {
+            try {
+              await db.chatMessage.create({
+                data: {
+                  userId,
+                  role: 'guru',
+                  content: fullContent,
+                  language: user.language,
+                },
+              })
+            } catch (e) {
+              console.error('Failed to save guru message:', e)
+            }
+          }
+
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     })
   } catch (error) {
-    console.error('Guru AI error:', error)
-    return NextResponse.json(
-      { content: "I'm having trouble connecting right now. The Vaathi servers might be busy — try again in a moment! 🛡️" },
-      { status: 200 } // Return 200 with fallback so the UI doesn't break
+    console.error('Guru API error:', error)
+    return new Response(
+      JSON.stringify({ error: 'SERVER_ERROR', message: "Something went wrong on our end. Try again! 🛡️" }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
   }
 }

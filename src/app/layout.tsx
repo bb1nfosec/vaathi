@@ -15,15 +15,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Vaathi — India's Open Source Cybersecurity Learning OS",
-  description: "From zero to ethical hacker — in your language, at your pace, on your machine. Free, open source cybersecurity learning platform built for India.",
-  keywords: ["Vaathi", "cybersecurity", "ethical hacking", "India", "CTF", "learning platform", "open source", "hackathon"],
+  description: "BYOLLM — Bring Your Own LLM. Learn cybersecurity with an AI mentor in your language. Free, open source, built for India.",
+  keywords: ["Vaathi", "cybersecurity", "ethical hacking", "India", "CTF", "AI mentor", "BYOLLM"],
   authors: [{ name: "Vaathi Team" }],
   icons: {
     icon: "/vaathi-logo.png",
   },
   openGraph: {
-    title: "Vaathi — India's Cybersecurity Learning OS",
-    description: "From zero to ethical hacker — in your language, at your pace, on your machine.",
+    title: "Vaathi — BYOLLM Cybersecurity Learning OS",
+    description: "Bring your own LLM. Learn cybersecurity with an AI mentor in your language.",
     type: "website",
   },
 };
@@ -36,7 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-cyber-dark text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         {children}
         <Toaster />

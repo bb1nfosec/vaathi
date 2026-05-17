@@ -18,7 +18,6 @@ import {
   Trophy,
   User,
   Terminal,
-  Bell,
   Menu,
   X,
 } from 'lucide-react'
@@ -26,18 +25,16 @@ import { useState } from 'react'
 
 const navItems = [
   { id: 'dashboard' as const, label: 'Dashboard', icon: Terminal },
-  { id: 'labs' as const, label: 'Labs', icon: Swords },
-  { id: 'arena' as const, label: 'Arena', icon: Trophy },
-  { id: 'guru-chat' as const, label: 'Guru AI', icon: Brain },
+  { id: 'guru' as const, label: 'Guru Chat', icon: Brain },
+  { id: 'arena' as const, label: 'CTF Arena', icon: Trophy },
   { id: 'profile' as const, label: 'Profile', icon: User },
 ]
 
 export default function Navbar() {
-  const { currentView, setView, user, assessment } = useVaathiStore()
+  const { currentView, setView, user } = useVaathiStore()
   const { level, xpInLevel, xpForNext, progress } = useXPProgress()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const tierConfig = TIER_CONFIG[user.tier]
-  const isAssessed = assessment.completed
+  const tierConfig = user ? TIER_CONFIG[user.tier] : TIER_CONFIG.egg
 
   return (
     <motion.nav
@@ -49,10 +46,10 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
         <button
-          onClick={() => setView(isAssessed ? 'dashboard' : 'landing')}
+          onClick={() => setView('dashboard')}
           className="flex items-center gap-2 group"
         >
-          <Shield className="w-7 h-7 text-neon group-hover:drop-shadow-[0_0_8px_rgba(0,255,136,0.5)] transition-all" />
+          <Shield className="w-7 h-7 text-neon group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.5)] transition-all" />
           <span className="text-xl font-bold tracking-tight">
             <span className="text-neon">VAATHI</span>
           </span>
@@ -60,38 +57,37 @@ export default function Navbar() {
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
-          {isAssessed &&
-            navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = currentView === item.id
-              return (
-                <Button
-                  key={item.id}
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setView(item.id)}
-                  className={`relative gap-2 ${
-                    isActive
-                      ? 'text-neon bg-neon/10'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {item.label}
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeNav"
-                      className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-neon rounded-full"
-                    />
-                  )}
-                </Button>
-              )
-            })}
+          {navItems.map((item) => {
+            const Icon = item.icon
+            const isActive = currentView === item.id
+            return (
+              <Button
+                key={item.id}
+                variant="ghost"
+                size="sm"
+                onClick={() => setView(item.id)}
+                className={`relative gap-2 ${
+                  isActive
+                    ? 'text-neon bg-neon/10'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {item.label}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeNav"
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-neon rounded-full"
+                  />
+                )}
+              </Button>
+            )
+          })}
         </div>
 
         {/* Right section */}
         <div className="flex items-center gap-3">
-          {isAssessed && (
+          {user && (
             <>
               {/* Level & XP */}
               <Tooltip>
@@ -124,12 +120,6 @@ export default function Navbar() {
                 </TooltipContent>
               </Tooltip>
 
-              {/* Notifications */}
-              <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-neon rounded-full" />
-              </Button>
-
               {/* Avatar */}
               <Avatar className="w-8 h-8 border border-cyber-border">
                 <AvatarFallback className="bg-neon/10 text-neon text-xs font-mono">
@@ -140,16 +130,14 @@ export default function Navbar() {
           )}
 
           {/* Mobile menu button */}
-          {isAssessed && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden text-muted-foreground"
-              onClick={() => setMobileOpen(!mobileOpen)}
-            >
-              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden text-muted-foreground"
+            onClick={() => setMobileOpen(!mobileOpen)}
+          >
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </Button>
         </div>
       </div>
 
@@ -180,12 +168,13 @@ export default function Navbar() {
               )
             })}
           </div>
-          {/* Mobile XP bar */}
-          <div className="mt-3 pt-3 border-t border-cyber-border flex items-center gap-2">
-            <span className="text-xs font-mono text-neon">Lv.{level}</span>
-            <Progress value={progress} className="flex-1 h-1.5" />
-            <span className="text-xs text-muted-foreground font-mono">{user.xp} XP</span>
-          </div>
+          {user && (
+            <div className="mt-3 pt-3 border-t border-cyber-border flex items-center gap-2">
+              <span className="text-xs font-mono text-neon">Lv.{level}</span>
+              <Progress value={progress} className="flex-1 h-1.5" />
+              <span className="text-xs text-muted-foreground font-mono">{user.xp} XP</span>
+            </div>
+          )}
         </motion.div>
       )}
     </motion.nav>

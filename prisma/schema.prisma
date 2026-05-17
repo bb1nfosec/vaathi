@@ -8,68 +8,25 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String   @default("Hacker")
-  tier         String   @default("egg")
-  xp           Int      @default(0)
-  level        Int      @default(1)
-  streak       Int      @default(0)
-  college      String   @default("")
-  state        String   @default("")
-  skills       String   @default("{}")
-  badges       String   @default("[]")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  completedLabs  CompletedLab[]
-  completedCTFs  CompletedCTF[]
-  chatMessages   ChatMessage[]
-}
-
-model Lab {
-  id          String @id @default(cuid())
-  title       String
-  description String
-  category    String
-  difficulty  String
-  duration    Int
-  xpReward    Int
-  flag        String
-  steps       String
-  hints       String   @default("[]")
-  createdAt   DateTime @default(now())
-}
-
-model CompletedLab {
-  id           String   @id @default(cuid())
-  userId       String
-  labId        String
-  xpEarned     Int
-  hintsUsed    Int      @default(0)
-  stepsCompleted Int    @default(0)
-  completedAt  DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model CTFChallenge {
-  id          String   @id @default(cuid())
-  title       String
-  description String
-  difficulty  String
-  points      Int
-  flag        String
-  category    String
-  participants Int     @default(0)
-  timeRemaining String @default("")
-  createdAt   DateTime @default(now())
-}
-
-model CompletedCTF {
-  id           String   @id @default(cuid())
-  userId       String
-  challengeId  String
-  pointsEarned Int
-  completedAt  DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  name          String
+  language      String   @default("english")
+  llmProvider   String   @default("groq")
+  llmApiKey     String   @default("")
+  llmModel      String   @default("llama-3.3-70b-versatile")
+  llmBaseUrl    String   @default("")
+  tier          String   @default("egg")
+  xp            Int      @default(0)
+  level         Int      @default(1)
+  streak        Int      @default(0)
+  lastActive    DateTime @default(now())
+  topicProgress String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  chatMessages  ChatMessage[]
+  completedLabs CompletedLab[]
+  completedCTFs CompletedCTF[]
+  badges        UserBadge[]
 }
 
 model ChatMessage {
@@ -79,5 +36,37 @@ model ChatMessage {
   content   String
   language  String   @default("english")
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CompletedLab {
+  id           String   @id @default(cuid())
+  userId       String
+  labTitle     String
+  difficulty   String   @default("")
+  xpEarned     Int      @default(0)
+  hintsUsed    Int      @default(0)
+  completedAt  DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CompletedCTF {
+  id           String   @id @default(cuid())
+  userId       String
+  challengeTitle String
+  category     String   @default("")
+  difficulty   String   @default("")
+  pointsEarned Int      @default(0)
+  completedAt  DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  name      String
+  emoji     String   @default("🏅")
+  earnedAt  DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -1,74 +1,84 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
-// POST /api/labs/complete — Record a lab completion
+// POST: Record completed lab with XP earned
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { userId, labId, xpEarned, hintsUsed, stepsCompleted } = body
+    const { userId, labTitle, difficulty, xpEarned, hintsUsed, topic, topicLevel } = body
 
-    if (!userId || !labId) {
-      return NextResponse.json({ error: 'userId and labId required' }, { status: 400 })
+    if (!userId || !labTitle) {
+      return NextResponse.json({ error: 'userId and labTitle required' }, { status: 400 })
+    }
+
+    const user = await db.user.findUnique({ where: { id: userId } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Check if already completed
     const existing = await db.completedLab.findFirst({
-      where: { userId, labId },
+      where: { userId, labTitle },
     })
 
     if (existing) {
-      return NextResponse.json({ message: 'Lab already completed', alreadyCompleted: true })
+      return NextResponse.json({ success: true, alreadyCompleted: true, message: 'Already completed!' })
     }
 
-    // Record completion
-    const completedLab = await db.completedLab.create({
+    // Save completed lab
+    await db.completedLab.create({
       data: {
         userId,
-        labId,
+        labTitle,
+        difficulty: difficulty || 'beginner',
         xpEarned: xpEarned || 0,
         hintsUsed: hintsUsed || 0,
-        stepsCompleted: stepsCompleted || 0,
       },
     })
 
-    // Update user XP and check for badges
-    const user = await db.user.findUnique({ where: { id: userId } })
-    if (user) {
-      const allCompleted = await db.completedLab.findMany({ where: { userId } })
-      const newXP = user.xp + xpEarned
-      const newLevel = Math.floor(newXP / 1000) + 1
-      let badges = JSON.parse(user.badges || '[]')
+    // Update XP via progress API
+    const xpToAdd = xpEarned || 100
+    const progressRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        xpToAdd,
+        topic: topic || labTitle.toLowerCase().replace(/\s+/g, '_'),
+        topicLevel: topicLevel || 1,
+      }),
+    })
 
-      // Earn badges
-      if (allCompleted.length >= 5 && !badges.includes('five-labs')) {
-        badges.push('five-labs')
+    const progressData = await progressRes.json()
+
+    // Check for lab count badge
+    const labCount = await db.completedLab.count({ where: { userId } })
+    const newBadges: Array<{ badgeId: string; name: string; emoji: string }> = []
+    if (labCount === 1) {
+      const existingBadge = await db.userBadge.findFirst({ where: { userId, badgeId: 'first-lab' } })
+      if (!existingBadge) {
+        await db.userBadge.create({ data: { userId, badgeId: 'first-lab', name: 'Lab Explorer', emoji: '🧪' } })
+        newBadges.push({ badgeId: 'first-lab', name: 'Lab Explorer', emoji: '🧪' })
       }
-      if (allCompleted.length >= 10 && !badges.includes('ten-labs')) {
-        badges.push('ten-labs')
+    }
+    if (labCount === 5) {
+      const existingBadge = await db.userBadge.findFirst({ where: { userId, badgeId: 'lab-5' } })
+      if (!existingBadge) {
+        await db.userBadge.create({ data: { userId, badgeId: 'lab-5', name: 'Lab Enthusiast', emoji: '🔬' } })
+        newBadges.push({ badgeId: 'lab-5', name: 'Lab Enthusiast', emoji: '🔬' })
       }
-
-      await db.user.update({
-        where: { id: userId },
-        data: {
-          xp: newXP,
-          level: newLevel,
-          badges: JSON.stringify(badges),
-        },
-      })
-
-      return NextResponse.json({
-        success: true,
-        completedLab,
-        newXp: newXP,
-        newLevel,
-        badges,
-        message: `Lab completed! +${xpEarned} XP`,
-      })
     }
 
-    return NextResponse.json({ success: true, completedLab })
+    return NextResponse.json({
+      success: true,
+      alreadyCompleted: false,
+      newXp: progressData.xp,
+      newLevel: progressData.level,
+      tierChanged: progressData.tierChanged,
+      newBadges: [...(progressData.newBadges || []), ...newBadges],
+    })
   } catch (error) {
-    console.error('Lab complete error:', error)
-    return NextResponse.json({ error: 'Failed to complete lab' }, { status: 500 })
+    console.error('Lab complete API error:', error)
+    return NextResponse.json({ error: 'Failed to record lab completion' }, { status: 500 })
   }
 }
