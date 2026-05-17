@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 
 const PROVIDER_URLS: Record<string, string> = {
   groq: 'https://api.groq.com/openai/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
   openai: 'https://api.openai.com/v1',
   together: 'https://api.together.xyz/v1',
   ollama: 'http://localhost:11434/v1',
