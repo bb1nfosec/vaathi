@@ -1,0 +1,108 @@
+// This is your Prisma schema file for Vaathi
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  tier         String   @default("egg")
+  xp           Int      @default(0)
+  level        Int      @default(1)
+  streak       Int      @default(0)
+  college      String?
+  state        String?
+  avatar       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  completedLabs  CompletedLab[]
+  completedCTFs  CompletedCTF[]
+  userBadges     UserBadge[]
+  certificates   Certificate[]
+  chatMessages   ChatMessage[]
+}
+
+model Lab {
+  id          String @id @default(cuid())
+  title       String
+  description String
+  category    String
+  difficulty  String
+  duration    Int
+  xpReward    Int
+  flag        String
+  steps       String
+  createdAt   DateTime @default(now())
+}
+
+model CompletedLab {
+  id        String   @id @default(cuid())
+  userId    String
+  labId     String
+  xpEarned  Int
+  completedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model CTFChallenge {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  difficulty  String
+  points      Int
+  flag        String
+  category    String
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model CompletedCTF {
+  id           String   @id @default(cuid())
+  userId       String
+  challengeId  String
+  pointsEarned Int
+  completedAt  DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model Badge {
+  id          String @id @default(cuid())
+  name        String
+  description String
+  icon        String
+  requirement Int
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Certificate {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String
+  issuedAt    DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
