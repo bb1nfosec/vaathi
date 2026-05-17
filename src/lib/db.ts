@@ -4,14 +4,17 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-function createPrismaClient() {
-  // If TURSO_AUTH_TOKEN is set, use libSQL adapter (for Vercel/Turso deployment)
-  // DATABASE_URL must be a libsql:// URL in that case
+function createPrismaClient(): PrismaClient {
+  // If TURSO_AUTH_TOKEN is set and DATABASE_URL is a libsql:// URL,
+  // use the libSQL adapter for Turso cloud database (Vercel deployment)
   const tursoAuthToken = process.env.TURSO_AUTH_TOKEN
   const databaseUrl = process.env.DATABASE_URL || ''
 
   if (tursoAuthToken && databaseUrl.startsWith('libsql://')) {
+    // Dynamic import to avoid bundling issues on Vercel/Turbopack
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { PrismaLibSQL } = require('@prisma/adapter-libsql')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createClient } = require('@libsql/client')
 
     const libsql = createClient({
@@ -21,12 +24,10 @@ function createPrismaClient() {
 
     const adapter = new PrismaLibSQL(libsql)
 
-    return new PrismaClient({
-      adapter,
-    })
+    return new PrismaClient({ adapter })
   }
 
-  // Standard SQLite (local dev with file:./db/dev.db)
+  // Standard SQLite (local development)
   return new PrismaClient()
 }
 
