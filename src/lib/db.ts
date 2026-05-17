@@ -1,10 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-  schemaEnsured: boolean
-}
-
+// No singleton — create fresh client on every request in production
+// This avoids stale env var issues on Vercel serverless
 function createPrismaClient(): PrismaClient {
   const tursoAuthToken = process.env.TURSO_AUTH_TOKEN || ''
   const databaseUrl = process.env.DATABASE_URL || ''
@@ -25,16 +22,23 @@ function createPrismaClient(): PrismaClient {
     return new PrismaClient({ adapter })
   }
 
-  // SQLite fallback: need at least a file: URL
-  // If DATABASE_URL is not set at all, Prisma will throw a clear error
+  // SQLite fallback
   return new PrismaClient()
 }
 
-export const db = globalForPrisma.prisma ?? createPrismaClient()
+// In development, reuse the client to avoid too many connections
+// In production (Vercel), always create fresh to pick up env vars correctly
+const globalForDb = globalThis as unknown as { prisma: PrismaClient | undefined }
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+export const db =
+  process.env.NODE_ENV === 'production'
+    ? createPrismaClient()
+    : (globalForDb.prisma ?? createPrismaClient())
 
-// DDL statements — uses libSQL client directly for Turso, Prisma raw for SQLite
+if (process.env.NODE_ENV !== 'production') globalForDb.prisma = db
+
+// ── Auto-create tables (no prisma db push needed) ──────────────────────
+
 const TABLE_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -118,53 +122,46 @@ const TABLE_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "LearningRoadmap_userId_key" ON "LearningRoadmap"("userId")`,
 ]
 
-let _ensurePromise: Promise<string | null> | null = null
+// Track if schema has been ensured (per cold start)
+const _schemaState = { ensured: false, promise: null as Promise<string | null> | null }
 
 export async function ensureSchema(): Promise<string | null> {
-  if (globalForPrisma.schemaEnsured) return null
-  if (_ensurePromise) return _ensurePromise
+  if (_schemaState.ensured) return null
+  if (_schemaState.promise) return _schemaState.promise
 
-  _ensurePromise = (async () => {
+  _schemaState.promise = (async () => {
     const tursoAuthToken = process.env.TURSO_AUTH_TOKEN || ''
     const databaseUrl = process.env.DATABASE_URL || ''
-    const isTurso = tursoAuthToken.length > 0 && databaseUrl.startsWith('libsql://')
 
-    // Guard: if no DATABASE_URL at all, fail immediately
     if (!databaseUrl) {
-      const msg = 'DATABASE_URL environment variable is not set. Please set it in Vercel dashboard → Settings → Environment Variables.'
-      console.error('[vaathi]', msg)
-      _ensurePromise = null
-      return msg
+      _schemaState.promise = null
+      return 'DATABASE_URL is not set'
     }
+
+    const isTurso = tursoAuthToken.length > 0 && databaseUrl.startsWith('libsql://')
 
     try {
       if (isTurso) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { createClient } = require('@libsql/client')
         const libsql = createClient({ url: databaseUrl, authToken: tursoAuthToken })
-
-        // Verify connection first
         await libsql.execute('SELECT 1')
-
         for (const sql of TABLE_STATEMENTS) {
           await libsql.execute(sql)
         }
-        console.log('[vaathi] Turso schema ensured')
       } else {
-        // Local SQLite via Prisma
         for (const sql of TABLE_STATEMENTS) {
           await db.$executeRawUnsafe(sql)
         }
-        console.log('[vaathi] SQLite schema ensured')
       }
-      globalForPrisma.schemaEnsured = true
+      _schemaState.ensured = true
       return null
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
-      console.error('[vaathi] Schema setup failed:', message)
-      _ensurePromise = null // allow retry
-      return `Database error: ${message}`
+      const msg = err instanceof Error ? err.message : String(err)
+      _schemaState.promise = null // allow retry
+      return `Schema error: ${msg}`
     }
   })()
 
-  return _ensurePromise
+  return _schemaState.promise
 }
