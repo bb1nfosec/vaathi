@@ -1,47 +1,75 @@
 import { PrismaClient } from '@prisma/client'
 
 /**
- * Create a PrismaClient — always reads env vars at call time.
- * In production (Vercel serverless), the client is created fresh per request
- * so env vars are guaranteed to be available.
- * In development, we reuse a single client via globalThis.
+ * Read env vars using bracket notation to PREVENT Vercel/Turbopack
+ * from inlining them at build time. Direct `process.env.DATABASE_URL`
+ * gets statically replaced → becomes the literal string "undefined" in the bundle.
+ */
+function getEnv(key: string): string {
+  return process.env[key] || ''
+}
+
+/**
+ * Create a PrismaClient — env vars are read at call time via getEnv().
+ * In production (Vercel serverless), always fresh per request.
+ * In development, reuse via globalThis to avoid connection exhaustion.
  */
 function createPrismaClient(): PrismaClient {
-  const tursoAuthToken = process.env.TURSO_AUTH_TOKEN || ''
-  const databaseUrl = process.env.DATABASE_URL || ''
+  const tursoAuthToken = getEnv('TURSO_AUTH_TOKEN')
+  const databaseUrl = getEnv('DATABASE_URL')
+
+  console.error('[db] createPrismaClient called:', {
+    NODE_ENV: getEnv('NODE_ENV'),
+    hasToken: !!tursoAuthToken,
+    url: databaseUrl ? databaseUrl.substring(0, 40) + '...' : 'EMPTY',
+  })
 
   // Turso mode: need BOTH token and libsql:// URL
   if (tursoAuthToken.length > 0 && databaseUrl.startsWith('libsql://')) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { PrismaLibSQL } = require('@prisma/adapter-libsql')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createClient } = require('@libsql/client')
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { PrismaLibSQL } = require('@prisma/adapter-libsql')
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createClient } = require('@libsql/client')
 
-    const libsql = createClient({
-      url: databaseUrl,
-      authToken: tursoAuthToken,
-    })
+      console.error('[db] Loading libSQL adapter...')
 
-    const adapter = new PrismaLibSQL(libsql)
-    return new PrismaClient({ adapter })
+      const libsql = createClient({
+        url: databaseUrl,
+        authToken: tursoAuthToken,
+      })
+
+      const adapter = new PrismaLibSQL(libsql)
+      const client = new PrismaClient({ adapter })
+      console.error('[db] Prisma client created with libSQL adapter')
+      return client
+    } catch (adapterErr: unknown) {
+      const msg = adapterErr instanceof Error ? adapterErr.message : String(adapterErr)
+      console.error('[db] libSQL adapter failed, falling back:', msg)
+    }
   }
 
-  // SQLite fallback
-  return new PrismaClient()
+  // SQLite fallback — also use bracket notation to avoid build-time replacement
+  console.error('[db] Using SQLite fallback (no adapter)')
+  return new PrismaClient({
+    datasources: {
+      db: {
+        url: databaseUrl || 'file:./dev.db',
+      },
+    },
+  })
 }
 
-// Dev-only singleton to avoid connection exhaustion during hot reloads
+// Dev-only singleton
 const globalForDb = globalThis as unknown as { prisma: PrismaClient | undefined }
 
 /**
- * Lazy proxy — defers PrismaClient creation until first actual query.
- * This guarantees process.env is fully populated on Vercel serverless.
+ * Lazy proxy — defers PrismaClient creation until first property access.
+ * In production: fresh client every time (guarantees runtime env vars).
+ * In development: reused via globalThis.
  */
 export const db = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
-    // In production (Vercel serverless): always create a fresh client per request
-    // to guarantee env vars are read at request-time, not module-load time.
-    // In development: reuse via globalThis to avoid connection exhaustion.
     if (process.env.NODE_ENV === 'production') {
       const client = createPrismaClient()
       const value = Reflect.get(client, prop, receiver)
@@ -151,8 +179,8 @@ export async function ensureSchema(): Promise<string | null> {
   if (_schemaState.promise) return _schemaState.promise
 
   _schemaState.promise = (async () => {
-    const tursoAuthToken = process.env.TURSO_AUTH_TOKEN || ''
-    const databaseUrl = process.env.DATABASE_URL || ''
+    const tursoAuthToken = getEnv('TURSO_AUTH_TOKEN')
+    const databaseUrl = getEnv('DATABASE_URL')
 
     if (!databaseUrl) {
       _schemaState.promise = null
