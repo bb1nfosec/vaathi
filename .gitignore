@@ -3,8 +3,10 @@ node_modules/
 db/*.db
 *.log
 .env
+.env.local
+.env.*.local
 .zscripts/
 bun.lock
-.env.local
 .vaathi-deploy
-*.log
+*.tsbuildinfo
+upload/*

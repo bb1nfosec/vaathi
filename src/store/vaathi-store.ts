@@ -82,6 +82,12 @@ export interface RoadmapTopicData {
   exercise: string
   quizJson: string
   xpReward: number
+  // SM-2 spaced repetition fields
+  reviewCount?: number
+  reviewInterval?: number
+  easeFactor?: number
+  lastReviewedAt?: string | null
+  nextReviewAt?: string | null
 }
 
 interface VaathiState {
@@ -119,6 +125,11 @@ interface VaathiState {
   microTaskEvaluating: boolean
   microTasksCompleted: number
 
+  // Review mode (spaced repetition re-visit of completed topic)
+  reviewMode: boolean
+  setReviewMode: (mode: boolean) => void
+  startReview: (topicId: string) => void
+
   // Navigation
   setView: (view: ViewType) => void
 
@@ -136,7 +147,8 @@ interface VaathiState {
   startTopic: (topicId: string) => Promise<void>
   loadTopicExplanation: (topicId: string) => Promise<void>
   loadTopicQuiz: (topicId: string) => Promise<void>
-  completeTopic: (topicId: string) => Promise<void>
+  completeTopic: (topicId: string, quizScore?: number) => Promise<void>
+  reviewTopic: (topicId: string, quality: number) => Promise<{ nextReviewAt: Date; reviewInterval: number; newStreak: number } | null>
 
   // Micro-tasks
   loadMicroTask: (topicId: string) => Promise<void>
@@ -186,6 +198,9 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
   topicQuiz: null,
   topicLoading: false,
 
+  // Review mode
+  reviewMode: false,
+
   // Micro-tasks
   currentMicroTask: null,
   microTaskLoading: false,
@@ -193,6 +208,16 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
   microTaskEvaluation: null,
   microTaskEvaluating: false,
   microTasksCompleted: 0,
+
+  setReviewMode: (mode) => set({ reviewMode: mode }),
+
+  startReview: (topicId) => set({
+    currentTopicId: topicId,
+    reviewMode: true,
+    topicExplanation: '',
+    topicQuiz: null,
+    currentView: 'topic-learn',
+  }),
 
   setView: (view) => set({ currentView: view }),
 
@@ -377,7 +402,7 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
   startTopic: async (topicId) => {
     const { userId } = get()
     if (!userId) return
-    set({ currentTopicId: topicId, topicExplanation: '', topicQuiz: null, currentView: 'topic-learn' })
+    set({ currentTopicId: topicId, topicExplanation: '', topicQuiz: null, currentView: 'topic-learn', reviewMode: false })
     try {
       await fetch('/api/topic-learn', {
         method: 'POST',
@@ -437,20 +462,44 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
     }
   },
 
-  // Topic: complete
-  completeTopic: async (topicId) => {
+  // Topic: complete — pass quizScore (SM-2 quality 0-5) when available
+  completeTopic: async (topicId, quizScore) => {
     const { userId } = get()
     if (!userId) return
     try {
       await fetch('/api/topic-learn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, topicId, action: 'complete' }),
+        body: JSON.stringify({ userId, topicId, action: 'complete', quizScore }),
       })
       await get().loadRoadmap()
       await get().refreshUser()
     } catch {
       // ignore
+    }
+  },
+
+  // Spaced repetition review of a completed topic.
+  // quality: 0-5 (5=perfect recall, 3=correct with effort, <3=forgot)
+  reviewTopic: async (topicId, quality) => {
+    const { userId } = get()
+    if (!userId) return null
+    try {
+      const res = await fetch('/api/topic-learn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, topicId, action: 'review', quality }),
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      await get().refreshUser()
+      return {
+        nextReviewAt: new Date(data.nextReviewAt),
+        reviewInterval: data.reviewInterval,
+        newStreak: data.newStreak,
+      }
+    } catch {
+      return null
     }
   },
 

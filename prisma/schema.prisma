@@ -22,6 +22,7 @@ model User {
   xp            Int      @default(0)
   level         Int      @default(1)
   streak        Int      @default(0)
+  streakLastDate DateTime?
   lastActive    DateTime @default(now())
   assessmentDone Boolean  @default(false)
   topicProgress String   @default("{}")
@@ -94,10 +95,15 @@ model RoadmapTopic {
   domain      String   @default("general")
   difficulty  String   @default("beginner")
   priority    Int      @default(0)
-  status      String   @default("locked") // locked, available, in_progress, completed
-  explanation String   @default("")
-  exercise    String   @default("")
-  quizJson    String   @default("[]")
-  xpReward    Int      @default(50)
-  roadmap     LearningRoadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  status        String   @default("locked") // locked, available, in_progress, completed
+  explanation   String   @default("")
+  exercise      String   @default("")
+  quizJson      String   @default("[]")
+  xpReward      Int      @default(50)
+  reviewCount   Int      @default(0)
+  reviewInterval Int     @default(1)
+  easeFactor    Float    @default(2.5)
+  lastReviewedAt DateTime?
+  nextReviewAt  DateTime?
+  roadmap       LearningRoadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
 }

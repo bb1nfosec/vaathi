@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import {
   Brain, ArrowLeft, CheckCircle2, Lock, Play,
-  Sparkles, RotateCcw, BookOpen, Trophy, Swords,
+  Sparkles, RotateCcw, BookOpen, Trophy, Clock, RefreshCw,
 } from 'lucide-react'
 
 const DOMAIN_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
@@ -22,8 +22,26 @@ const DOMAIN_CONFIG: Record<string, { icon: string; color: string; label: string
   general: { icon: '🛡️', color: '#64748b', label: 'General' },
 }
 
+function isDueForReview(topic: RoadmapTopicData): boolean {
+  if (topic.status !== 'completed') return false
+  if (!topic.nextReviewAt) return true  // completed before SM-2 was added
+  return new Date(topic.nextReviewAt) <= new Date()
+}
+
+function formatReviewDate(nextReviewAt: string | null | undefined): string {
+  if (!nextReviewAt) return 'Review now'
+  const d = new Date(nextReviewAt)
+  const now = new Date()
+  const diffDays = Math.round((d.getTime() - now.getTime()) / 86_400_000)
+  if (diffDays <= 0) return 'Due now'
+  if (diffDays === 1) return 'Due tomorrow'
+  if (diffDays < 7) return `Due in ${diffDays}d`
+  if (diffDays < 30) return `Due in ${Math.round(diffDays / 7)}w`
+  return `Due in ${Math.round(diffDays / 30)}mo`
+}
+
 export default function LearningRoadmap() {
-  const { roadmapTopics, roadmapSummary, user, setView, startTopic, loadRoadmap } = useVaathiStore()
+  const { roadmapTopics, roadmapSummary, user, setView, startTopic, startReview, loadRoadmap } = useVaathiStore()
 
   useEffect(() => {
     if (roadmapTopics.length === 0) loadRoadmap()
@@ -36,6 +54,7 @@ export default function LearningRoadmap() {
   const available = roadmapTopics.filter((t) => t.status === 'available').length
   const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0
   const nextAvailable = roadmapTopics.find((t) => t.status === 'available')
+  const dueTopics = roadmapTopics.filter(isDueForReview)
 
   // Group topics by domain
   const domains: Record<string, RoadmapTopicData[]> = {}
@@ -51,6 +70,14 @@ export default function LearningRoadmap() {
     const isAvailable = topic.status === 'available'
     const isLocked = topic.status === 'locked'
     const isInProgress = topic.status === 'in_progress'
+    const due = isDueForReview(topic)
+
+    const handleClick = () => {
+      if (due) return startReview(topic.id)
+      if (isAvailable || isInProgress) return startTopic(topic.id)
+    }
+
+    const isClickable = due || isAvailable || isInProgress
 
     return (
       <motion.div
@@ -58,19 +85,22 @@ export default function LearningRoadmap() {
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: index * 0.05 }}
         className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+          due ? 'bg-amber-500/5 border-amber-500/30 hover:border-amber-500/50 cursor-pointer' :
           isCompleted ? 'bg-neon/5 border-neon/20' :
           isAvailable || isInProgress ? 'bg-white/[0.03] border-cyber-border hover:border-neon/30 cursor-pointer' :
           'bg-white/[0.01] border-transparent opacity-50'
         }`}
-        onClick={() => isAvailable || isInProgress ? startTopic(topic.id) : undefined}
+        onClick={isClickable ? handleClick : undefined}
       >
-        {/* Status */}
+        {/* Status icon */}
         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+          due ? 'bg-amber-500/20 text-amber-400' :
           isCompleted ? 'bg-neon text-cyber-dark' :
           isAvailable || isInProgress ? 'bg-neon/10 text-neon' :
           'bg-white/5 text-muted-foreground'
         }`}>
-          {isCompleted ? <CheckCircle2 className="w-4 h-4" /> :
+          {due ? <RefreshCw className="w-3.5 h-3.5" /> :
+           isCompleted ? <CheckCircle2 className="w-4 h-4" /> :
            isLocked ? <Lock className="w-3.5 h-3.5" /> :
            <Play className="w-4 h-4" />}
         </div>
@@ -78,11 +108,16 @@ export default function LearningRoadmap() {
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className={`text-sm font-medium truncate ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
+            <span className={`text-sm font-medium truncate ${isCompleted && !due ? 'line-through text-muted-foreground' : ''}`}>
               {topic.title}
             </span>
+            {due && (
+              <Badge className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 shrink-0">
+                REVIEW
+              </Badge>
+            )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px]">{domainCfg.icon}</span>
             <Badge
               variant="outline"
@@ -95,12 +130,18 @@ export default function LearningRoadmap() {
               {topic.difficulty}
             </Badge>
             <span className="text-[10px] text-muted-foreground">+{topic.xpReward} XP</span>
+            {isCompleted && topic.reviewCount && topic.reviewCount > 0 && !due && topic.nextReviewAt && (
+              <span className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5">
+                <Clock className="w-2.5 h-2.5" />
+                {formatReviewDate(topic.nextReviewAt)}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Arrow */}
-        {(isAvailable || isInProgress) && (
-          <span className="text-muted-foreground text-sm">→</span>
+        {isClickable && (
+          <span className={`text-sm ${due ? 'text-amber-400' : 'text-muted-foreground'}`}>→</span>
         )}
       </motion.div>
     )
@@ -158,10 +199,62 @@ export default function LearningRoadmap() {
                 <span>{completed} completed</span>
                 <span>{available} available</span>
                 <span>{total - completed - available} locked</span>
+                {dueTopics.length > 0 && (
+                  <span className="text-amber-400 font-medium">{dueTopics.length} due for review</span>
+                )}
               </div>
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Due for Review */}
+        {dueTopics.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="mb-6">
+            <Card className="bg-amber-500/5 border-amber-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-amber-400">
+                  <RefreshCw className="w-4 h-4" />
+                  Due for Review
+                  <Badge className="ml-auto bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px]">
+                    {dueTopics.length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-xs text-muted-foreground mb-3">
+                  Spaced repetition — revisit these topics to lock them in long-term memory.
+                </p>
+                {dueTopics.map((topic, i) => (
+                  <motion.div
+                    key={topic.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 hover:border-amber-500/40 cursor-pointer transition-all"
+                    onClick={() => startReview(topic.id)}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{topic.title}</p>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                        <span>{DOMAIN_CONFIG[topic.domain]?.icon} {DOMAIN_CONFIG[topic.domain]?.label || topic.domain}</span>
+                        {topic.reviewCount !== undefined && topic.reviewCount > 0 && (
+                          <span>· {topic.reviewCount} review{topic.reviewCount !== 1 ? 's' : ''} done</span>
+                        )}
+                        {topic.easeFactor !== undefined && (
+                          <span>· EF {topic.easeFactor.toFixed(1)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-amber-400 text-sm shrink-0">→</span>
+                  </motion.div>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Next Available */}
         {nextAvailable && (
@@ -189,6 +282,7 @@ export default function LearningRoadmap() {
           {Object.entries(domains).map(([domain, topics]) => {
             const cfg = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG.general
             const domainCompleted = topics.filter((t) => t.status === 'completed').length
+            const domainDue = topics.filter(isDueForReview).length
             return (
               <motion.div
                 key={domain}
@@ -204,6 +298,11 @@ export default function LearningRoadmap() {
                       <Badge variant="outline" className="text-[10px] ml-auto border-cyber-border">
                         {domainCompleted}/{topics.length}
                       </Badge>
+                      {domainDue > 0 && (
+                        <Badge className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                          {domainDue} due
+                        </Badge>
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -219,7 +318,7 @@ export default function LearningRoadmap() {
           })}
         </div>
 
-        {/* Quick Actions */}
+        {/* Roadmap Complete */}
         {completed === total && total > 0 && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
             <Card className="bg-gradient-to-br from-amber-500/5 to-neon/5 border-amber-500/20">
@@ -229,9 +328,10 @@ export default function LearningRoadmap() {
                 </motion.div>
                 <h2 className="text-lg font-bold mt-3 mb-1">Roadmap Complete!</h2>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Amazing! You&apos;ve completed your personalized learning path. Ready for challenges?
+                  Amazing! You&apos;ve completed your personalized learning path.
+                  {dueTopics.length > 0 && ` Keep your knowledge sharp — ${dueTopics.length} topic${dueTopics.length !== 1 ? 's' : ''} ready for review.`}
                 </p>
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center flex-wrap">
                   <Button onClick={() => setView('assessment')} variant="outline" className="gap-2 text-sm">
                     <RotateCcw className="w-4 h-4" /> Re-assess
                   </Button>

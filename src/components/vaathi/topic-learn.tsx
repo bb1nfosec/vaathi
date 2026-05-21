@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   ArrowLeft, BookOpen, Loader2, Sparkles, CheckCircle2,
   XCircle, Brain, Send, Trophy, Zap, Code, Terminal,
-  FileSearch, Shield, MessageCircle, Lightbulb, RotateCcw,
+  FileSearch, Shield, MessageCircle, Lightbulb, RotateCcw, RefreshCw,
 } from 'lucide-react'
 
 const TASK_ICONS: Record<string, React.ReactNode> = {
@@ -45,13 +45,15 @@ export default function TopicLearn() {
   const {
     currentTopicId, roadmapTopics, user, setView,
     topicExplanation, topicQuiz, topicLoading,
-    loadTopicExplanation, loadTopicQuiz, completeTopic, sendMessage,
+    loadTopicExplanation, loadTopicQuiz, completeTopic, reviewTopic, sendMessage,
     currentMicroTask, microTaskLoading, microTaskAnswer, microTaskEvaluation,
     microTaskEvaluating, microTasksCompleted,
     loadMicroTask, evaluateMicroTask, setMicroTaskAnswer, clearMicroTask,
+    reviewMode, setReviewMode,
   } = useVaathiStore()
 
-  const [activeTab, setActiveTab] = useState<'learn' | 'tasks' | 'quiz'>('learn')
+  // In review mode, start on the quiz tab to force active recall
+  const [activeTab, setActiveTab] = useState<'learn' | 'tasks' | 'quiz'>(reviewMode ? 'quiz' : 'learn')
   const [quizState, setQuizState] = useState<'idle' | 'active' | 'done'>('idle')
   const [currentQ, setCurrentQ] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
@@ -66,9 +68,20 @@ export default function TopicLearn() {
 
   useEffect(() => {
     if (currentTopicId) {
-      loadTopicExplanation(currentTopicId)
+      if (reviewMode) {
+        setActiveTab('quiz')
+        loadTopicQuiz(currentTopicId)
+        setQuizState('active')
+        setCurrentQ(0)
+        setScore(0)
+        setSelectedAnswer(null)
+        setShowExplanation(false)
+      } else {
+        setActiveTab('learn')
+        loadTopicExplanation(currentTopicId)
+      }
     }
-  }, [currentTopicId])
+  }, [currentTopicId, reviewMode])
 
   const handleStartQuiz = () => {
     if (currentTopicId) {
@@ -101,11 +114,32 @@ export default function TopicLearn() {
     }
   }
 
-  const handleComplete = async () => {
+  // Map 0-3 correct answers → SM-2 quality 0-5
+  const quizScoreToSM2 = (correct: number, total: number): number => {
+    const ratio = total > 0 ? correct / total : 0
+    if (ratio === 1) return 5       // all correct
+    if (ratio >= 0.67) return 4     // 2/3
+    if (ratio >= 0.33) return 2     // 1/3 — incorrect, below threshold
+    return 1                        // 0/3
+  }
+
+  const handleComplete = async (sm2Quality?: number) => {
     if (!currentTopicId) return
     setIsCompleting(true)
-    await completeTopic(currentTopicId)
+    await completeTopic(currentTopicId, sm2Quality)
     setIsCompleting(false)
+  }
+
+  const handleSubmitReview = async () => {
+    if (!currentTopicId) return
+    setIsCompleting(true)
+    const quality = quizScoreToSM2(score, topicQuiz?.length ?? 3)
+    const result = await reviewTopic(currentTopicId, quality)
+    setIsCompleting(false)
+    setReviewMode(false)
+    setView('roadmap')
+    // Brief toast-like feedback could be added here if desired
+    void result
   }
 
   const handleAskGuru = async () => {
@@ -175,11 +209,15 @@ export default function TopicLearn() {
                   {topic.difficulty}
                 </Badge>
                 <Badge variant="outline" className="text-[10px] border-neon/30 text-neon">+{topic.xpReward} XP</Badge>
-                {isCompleted && (
+                {reviewMode ? (
+                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] gap-1">
+                    <RefreshCw className="w-3 h-3" /> Review Mode
+                  </Badge>
+                ) : isCompleted ? (
                   <Badge className="bg-neon/10 text-neon border border-neon/30 text-[10px] gap-1">
                     <CheckCircle2 className="w-3 h-3" /> Completed
                   </Badge>
-                )}
+                ) : null}
                 {microTasksCompleted > 0 && (
                   <Badge variant="outline" className="text-[10px] border-cyan-500/30 text-cyan-400 gap-1">
                     <Zap className="w-3 h-3" /> {microTasksCompleted} tasks done
@@ -240,7 +278,7 @@ export default function TopicLearn() {
 
             {/* Actions */}
             <div className="flex flex-wrap gap-2">
-              {!isCompleted && (
+              {!isCompleted && !reviewMode && (
                 <Button onClick={handleComplete} disabled={isCompleting} className="gap-2 bg-neon text-cyber-dark hover:bg-neon/90">
                   {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   {isCompleting ? 'Completing...' : 'Mark as Complete'}
@@ -541,7 +579,7 @@ export default function TopicLearn() {
 
             {quizState === 'done' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <Card className="bg-white/[0.02] border-cyber-border">
+                <Card className={`border-cyber-border ${reviewMode ? 'bg-amber-500/5' : 'bg-white/[0.02]'}`}>
                   <CardContent className="p-8 text-center">
                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }}>
                       <span className="text-4xl">{score === (topicQuiz?.length || 0) ? '🎉' : score >= 2 ? '👍' : '📚'}</span>
@@ -549,6 +587,15 @@ export default function TopicLearn() {
                     <h2 className="text-xl font-bold mt-3 mb-1">
                       {score}/{topicQuiz?.length || 0} Correct
                     </h2>
+                    {reviewMode && (
+                      <p className="text-xs text-amber-400 font-medium mb-1">
+                        {score === (topicQuiz?.length || 0)
+                          ? 'Perfect recall! Next review in ~6 days.'
+                          : score >= 2
+                          ? 'Good recall. Next review in a few days.'
+                          : 'Needs work — review scheduled for tomorrow.'}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground mb-4">
                       {score === (topicQuiz?.length || 0)
                         ? 'Perfect score! You really know this topic!'
@@ -557,18 +604,35 @@ export default function TopicLearn() {
                         : 'Keep learning! Go through the explanation again and try once more.'}
                     </p>
                     <div className="flex gap-2 justify-center flex-wrap">
-                      {!isCompleted && (
-                        <Button onClick={handleComplete} disabled={isCompleting} className="gap-2 bg-neon text-cyber-dark hover:bg-neon/90">
+                      {reviewMode ? (
+                        <Button
+                          onClick={handleSubmitReview}
+                          disabled={isCompleting}
+                          className="gap-2 bg-amber-500 text-cyber-dark hover:bg-amber-400"
+                        >
+                          {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                          {isCompleting ? 'Saving...' : 'Submit Review'}
+                        </Button>
+                      ) : !isCompleted ? (
+                        <Button
+                          onClick={() => handleComplete(quizScoreToSM2(score, topicQuiz?.length ?? 3))}
+                          disabled={isCompleting}
+                          className="gap-2 bg-neon text-cyber-dark hover:bg-neon/90"
+                        >
                           {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                           Complete Topic
                         </Button>
+                      ) : null}
+                      {!reviewMode && (
+                        <>
+                          <Button onClick={handleStartQuiz} variant="outline" className="gap-2 border-cyber-border">
+                            <Sparkles className="w-4 h-4" /> Retry Quiz
+                          </Button>
+                          <Button onClick={() => setActiveTab('tasks')} variant="outline" className="gap-2 border-cyan-500/30 text-cyan-400">
+                            <Zap className="w-4 h-4" /> Practice Tasks
+                          </Button>
+                        </>
                       )}
-                      <Button onClick={handleStartQuiz} variant="outline" className="gap-2 border-cyber-border">
-                        <Sparkles className="w-4 h-4" /> Retry Quiz
-                      </Button>
-                      <Button onClick={() => setActiveTab('tasks')} variant="outline" className="gap-2 border-cyan-500/30 text-cyan-400">
-                        <Zap className="w-4 h-4" /> Practice Tasks
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>

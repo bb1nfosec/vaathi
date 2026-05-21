@@ -18,8 +18,8 @@ import {
   Shield,
   BookOpen,
   Sparkles,
-  Clock,
   Key,
+  RefreshCw,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -40,9 +40,11 @@ export default function Dashboard() {
   const completedTopics = roadmapTopics.filter((t) => t.status === 'completed').length
   const nextAvailableTopic = roadmapTopics.find((t) => t.status === 'available')
 
-  // Check if enough time has passed for a quick check-in (24h)
-  const lastActiveDate = user.id ? new Date() : new Date()
-  const showCheckIn = false // placeholder — can be enhanced with lastActive tracking
+  const dueReviewsCount = roadmapTopics.filter((t) => {
+    if (t.status !== 'completed') return false
+    if (!t.nextReviewAt) return true
+    return new Date(t.nextReviewAt) <= new Date()
+  }).length
 
   // Parse topic progress
   let topicProgress: Record<string, number> = {}
@@ -82,7 +84,9 @@ export default function Dashboard() {
             { label: 'Total XP', value: xp.toString(), icon: Zap, color: '#10b981' },
             { label: 'Level', value: level.toString(), icon: Star, color: '#f59e0b' },
             { label: 'Streak', value: `${user.streak}d`, icon: Flame, color: '#ef4444' },
-            { label: 'Badges', value: totalBadges.toString(), icon: Shield, color: '#a855f7' },
+            dueReviewsCount > 0
+              ? { label: 'Reviews Due', value: dueReviewsCount.toString(), icon: RefreshCw, color: '#f59e0b', onClick: () => setView('roadmap') }
+              : { label: 'Badges', value: totalBadges.toString(), icon: Shield, color: '#a855f7' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -90,7 +94,10 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
             >
-              <Card className="bg-white/[0.02] border-cyber-border">
+              <Card
+                className={`bg-white/[0.02] border-cyber-border ${'onClick' in stat && stat.onClick ? 'cursor-pointer hover:border-amber-500/40 transition-colors' : ''}`}
+                onClick={'onClick' in stat ? stat.onClick : undefined}
+              >
                 <CardContent className="p-4 flex items-center gap-3">
                   <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
@@ -208,6 +215,20 @@ export default function Dashboard() {
                             <Sparkles className="w-3.5 h-3.5" /> Start Assessment
                           </Button>
                         </div>
+                      </div>
+                    </div>
+                  )}
+                  {roadmapGenerated && dueReviewsCount > 0 && (
+                    <div className="mb-4 p-4 rounded-xl bg-amber-500/5 border border-amber-500/30">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-amber-400 font-medium mb-0.5">SPACED REPETITION</p>
+                          <p className="text-sm font-semibold">{dueReviewsCount} topic{dueReviewsCount !== 1 ? 's' : ''} due for review</p>
+                          <p className="text-xs text-muted-foreground">Lock knowledge in long-term memory</p>
+                        </div>
+                        <Button onClick={() => setView('roadmap')} size="sm" className="bg-amber-500 text-cyber-dark hover:bg-amber-400 gap-1 shrink-0">
+                          <RefreshCw className="w-3.5 h-3.5" /> Review
+                        </Button>
                       </div>
                     </div>
                   )}

@@ -1,6 +1,54 @@
 import { db, ensureSchema } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
+// SM-2 spaced repetition algorithm.
+// quality: 0-5 (5 = perfect recall, 3 = correct with difficulty, <3 = incorrect)
+// Returns the new interval (days), ease factor, and next review date.
+function computeSM2(
+  quality: number,
+  reviewCount: number,
+  prevInterval: number,
+  prevEaseFactor: number
+): { interval: number; easeFactor: number; nextReviewAt: Date } {
+  quality = Math.max(0, Math.min(5, Math.round(quality)))
+
+  let interval: number
+  let easeFactor = prevEaseFactor
+
+  if (quality >= 3) {
+    if (reviewCount === 0) interval = 1
+    else if (reviewCount === 1) interval = 6
+    else interval = Math.round(prevInterval * prevEaseFactor)
+    easeFactor = prevEaseFactor + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)
+    if (easeFactor < 1.3) easeFactor = 1.3
+  } else {
+    // Incorrect — restart interval, keep ease factor unchanged
+    interval = 1
+  }
+
+  const nextReviewAt = new Date()
+  nextReviewAt.setDate(nextReviewAt.getDate() + interval)
+  return { interval, easeFactor, nextReviewAt }
+}
+
+// Returns updated streak and streakLastDate based on the current date.
+function computeStreak(
+  currentStreak: number,
+  streakLastDate: Date | null
+): { streak: number; streakLastDate: Date } {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+  if (!streakLastDate) return { streak: 1, streakLastDate: today }
+
+  const last = new Date(streakLastDate.getFullYear(), streakLastDate.getMonth(), streakLastDate.getDate())
+  const diffDays = Math.round((today.getTime() - last.getTime()) / 86_400_000)
+
+  if (diffDays === 0) return { streak: currentStreak, streakLastDate: last }
+  if (diffDays === 1) return { streak: currentStreak + 1, streakLastDate: today }
+  return { streak: 1, streakLastDate: today }
+}
+
 const PROVIDER_URLS: Record<string, string> = {
   groq: 'https://api.groq.com/openai/v1',
   openrouter: 'https://openrouter.ai/api/v1',
@@ -42,11 +90,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, status: 'in_progress' })
     }
 
-    // Action: complete - mark topic as completed, award XP, unlock next
+    // Action: complete - mark topic as completed, apply SM-2, award XP, update streak, unlock next
     if (action === 'complete') {
+      // quizScore: SM-2 quality 0-5 (default 3 = "correct with difficulty")
+      const quality: number = typeof quizScore === 'number' ? quizScore : 3
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const t = topic as any
+      const sm2 = computeSM2(quality, t.reviewCount ?? 0, t.reviewInterval ?? 1, t.easeFactor ?? 2.5)
+      // Fields added in schema but not yet in generated Prisma types — cast required
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sm2Fields: any = {
+        reviewCount: (t.reviewCount ?? 0) + 1,
+        reviewInterval: sm2.interval,
+        easeFactor: sm2.easeFactor,
+        lastReviewedAt: new Date(),
+        nextReviewAt: sm2.nextReviewAt,
+      }
+
       await db.roadmapTopic.update({
         where: { id: topicId },
-        data: { status: 'completed' },
+        data: { status: 'completed', ...sm2Fields },
       })
 
       // Award XP
@@ -62,9 +125,14 @@ export async function POST(request: NextRequest) {
         { tier: 'burn', minXp: 5000 },
       ]
       let newTier = 'egg'
-      for (const t of tierThresholds) {
-        if (newTotalXp >= t.minXp) newTier = t.tier
+      for (const th of tierThresholds) {
+        if (newTotalXp >= th.minXp) newTier = th.tier
       }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const streakUpdate = computeStreak(user.streak, (user as any).streakLastDate ?? null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const streakFields: any = { streakLastDate: streakUpdate.streakLastDate }
 
       await db.user.update({
         where: { id: userId },
@@ -73,6 +141,8 @@ export async function POST(request: NextRequest) {
           level: newLevel,
           tier: newTier,
           lastActive: new Date(),
+          streak: streakUpdate.streak,
+          ...streakFields,
         },
       })
 
@@ -119,6 +189,51 @@ export async function POST(request: NextRequest) {
         totalXp: newTotalXp,
         newLevel,
         newTier,
+        nextReviewAt: sm2.nextReviewAt,
+        reviewInterval: sm2.interval,
+        newStreak: streakUpdate.streak,
+        streakChanged: streakUpdate.streak !== user.streak,
+      })
+    }
+
+    // Action: review - SM-2 review of an already-completed topic
+    // Body: { quality: 0-5 }  (5=perfect, 3=recalled with effort, <3=forgot)
+    if (action === 'review') {
+      const quality: number = typeof body.quality === 'number' ? body.quality : 3
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const t = topic as any
+      const sm2 = computeSM2(quality, t.reviewCount ?? 0, t.reviewInterval ?? 1, t.easeFactor ?? 2.5)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sm2Fields: any = {
+        reviewCount: (t.reviewCount ?? 0) + 1,
+        reviewInterval: sm2.interval,
+        easeFactor: sm2.easeFactor,
+        lastReviewedAt: new Date(),
+        nextReviewAt: sm2.nextReviewAt,
+      }
+
+      await db.roadmapTopic.update({
+        where: { id: topicId },
+        data: sm2Fields,
+      })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const streakUpdate = computeStreak(user.streak, (user as any).streakLastDate ?? null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const streakFields: any = { streakLastDate: streakUpdate.streakLastDate }
+
+      await db.user.update({
+        where: { id: userId },
+        data: { lastActive: new Date(), streak: streakUpdate.streak, ...streakFields },
+      })
+
+      return NextResponse.json({
+        success: true,
+        nextReviewAt: sm2.nextReviewAt,
+        reviewInterval: sm2.interval,
+        reviewCount: (t.reviewCount ?? 0) + 1,
+        newStreak: streakUpdate.streak,
+        streakChanged: streakUpdate.streak !== user.streak,
       })
     }
 
@@ -397,7 +512,7 @@ Output ONLY valid JSON:
       return NextResponse.json({ quiz, cached: false })
     }
 
-    return NextResponse.json({ error: 'Unknown action. Use: start, explain, quiz, microtask, evaluate-task, complete' }, { status: 400 })
+    return NextResponse.json({ error: 'Unknown action. Use: start, explain, quiz, microtask, evaluate-task, complete, review' }, { status: 400 })
   } catch (error) {
     console.error('Topic learn API error:', error)
     return NextResponse.json({ error: 'SERVER_ERROR', message: 'Something went wrong.' }, { status: 200 })
