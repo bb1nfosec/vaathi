@@ -1,97 +1,172 @@
-# 🛡️ Vaathi — India's Open Source Cybersecurity Learning OS
+<div align="center">
 
-> *"Bring Your Own LLM. No servers. No subscriptions. Just your API key and Vaathi as the wrapper."*
+<img src="public/vaathi-logo.png" alt="Vaathi Logo" width="96" height="96" />
 
-![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38bdf8?logo=tailwindcss)
-![License](https://img.shields.io/badge/License-MIT-green)
+# VAATHI
+
+### India's Open Source Cybersecurity Learning OS
+
+*"Bring Your Own LLM. No servers. No subscriptions. Just your API key and Vaathi as the wrapper."*
+
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](https://prisma.io)
+[![Vercel](https://img.shields.io/badge/Deploy-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-10B981?style=for-the-badge)](LICENSE)
+
+**[Live Demo](https://vaathi.vercel.app)** · **[Deploy Your Own](#-one-command-deploy-3-minutes)** · **[Report Bug](https://github.com/bb1nfosec/vaathi/issues)**
+
+---
+
+**Total cost to run Vaathi: $0 forever.**
+
+</div>
+
+---
 
 ## What is Vaathi?
 
-Vaathi is an AI-powered cybersecurity learning platform where **students bring their own LLM API key** (Groq is free!) and Vaathi acts as the intelligent wrapper that orchestrates their entire learning journey.
+Vaathi is an AI-powered cybersecurity learning platform where **students bring their own LLM API key** — Groq is completely free — and Vaathi acts as the intelligent wrapper that orchestrates their entire learning journey.
 
-The AI dynamically assesses their skills, generates a personalized roadmap, teaches concepts, creates hands-on micro-tasks, evaluates their progress, and schedules **spaced repetition reviews** to lock knowledge into long-term memory — all in their preferred Indian language.
+The AI dynamically **assesses your skills**, **generates a personalized roadmap**, **teaches concepts**, **creates hands-on micro-tasks**, **evaluates your answers**, and **schedules spaced repetition reviews** to lock knowledge into long-term memory — all in your preferred Indian language.
 
-**Total cost for any student: $0 forever.**
-
-## 🚀 One-Command Deploy (3 minutes)
-
-Want your own Vaathi instance? Fork this repo and run:
-
-```bash
-git clone https://github.com/YOUR_USERNAME/vaathi.git
-cd vaathi
-npm install
-bash deploy.sh
-```
-
-That's it. The script automatically:
-1. Checks prerequisites (Node.js, npm, git)
-2. Installs Turso CLI + Vercel CLI if needed
-3. Signs you into Turso (browser-based, no passwords)
-4. Creates a free Turso database and pushes the schema
-5. Deploys to Vercel with all environment variables set
-6. Gives you your live URL
-
-> **Requirements:** Node.js 18+, npm, git, a GitHub account, and a Turso account (free, created during setup).
+---
 
 ## Why Vaathi?
 
 | Problem | Solution |
-|---|---|
-| TryHackMe/HackTheBox costs $14/month | **Free** — student brings their own LLM key |
-| Everything is in English | **6 languages** — Tamil, Hindi, Telugu, Malayalam, Kannada, English |
-| One-size-fits-all content | **AI assessment** → personalized roadmap based on what YOU know |
-| Need VMs for labs | **Micro-tasks** — code analysis, decode challenges, log forensics (no VMs!) |
-| Learned → forgotten | **SM-2 spaced repetition** — scheduled reviews at optimal intervals |
-| No real tutor | **Guru AI** — always available, adapts to your level, remembers you |
+|:--|:--|
+| TryHackMe / HackTheBox costs $14/month | **Free** — you bring your own Groq/OpenRouter key |
+| All content is in English | **6 languages** — Tamil, Hindi, Telugu, Malayalam, Kannada, English |
+| One-size-fits-all curriculum | **AI skill assessment** → personalized roadmap based on what you actually know |
+| Labs need VMs and setup time | **Micro-tasks** — code analysis, CTFs, log forensics, decode challenges (no VMs!) |
+| Learned today, forgotten next week | **SM-2 spaced repetition** — scheduled reviews at scientifically optimal intervals |
+| No guidance on what to learn next | **Guru AI** — always available, adapts to your level, teaches in your language |
+| Have to start from zero every time | **5 curated preset learning paths** — jump straight into structured content |
+
+---
+
+## Features
+
+### 🧠 Dynamic Skill Assessment
+Guru AI asks technical cybersecurity questions in a conversation — no boring MCQs. You explain concepts in your own words and the AI evaluates your depth across 6 domains, then generates a **personalized learning roadmap** that starts from your actual knowledge gaps.
+
+### 🛤️ Preset Learning Paths
+Skip the assessment and jump straight into structured content. Choose from 5 expert-curated paths:
+
+| Path | Focus | Level |
+|:--|:--|:--|
+| 🌐 **Web Hacker** | OWASP Top 10, XSS, SQLi, Bug Bounty | Intermediate |
+| 🔒 **Network Defender** | Wireshark, firewalls, IDS/IPS, Blue Team ops | Beginner |
+| 🦠 **Malware Analyst** | Static/dynamic analysis, reverse engineering, YARA | Advanced |
+| 🕵️ **OSINT Investigator** | Google dorking, Shodan, social engineering defence | Beginner |
+| ☁️ **Cloud Security** | AWS/GCP misconfigurations, IAM, CloudTrail forensics | Intermediate |
+
+### 🔁 SM-2 Spaced Repetition
+Every completed topic is scheduled for review using the **SuperMemo 2 algorithm**. Your quiz score at completion sets the initial interval — perfect score means a longer gap before review. The dashboard always surfaces topics due for review, and the ease factor auto-adjusts so topics you struggle with come back sooner.
+
+### ⚡ Micro-Tasks — No VMs Needed
+6 hands-on task types, each taking 2–5 minutes. AI generates AND evaluates:
+
+- **Code Analysis** — find the vulnerability in a snippet
+- **Command Challenge** — explain this `nmap`/`tcpdump`/`curl` command
+- **Decode/Encode** — Base64, Hex, ROT13, JWT — find the flag
+- **Scenario Response** — you see this security alert, what do you do?
+- **Log Analysis** — find the attack in this server/firewall log
+- **Concept Explain** — teach this topic to a complete beginner
+
+### 🧑‍💻 Guru AI Chat
+Streaming AI chat that generates labs and CTF challenges on demand. Adapts to your tier, teaches in your language, uses Indian cybersecurity context (CERT-In alerts, UPI fraud patterns, UIDAI privacy).
+
+### 🏆 CTF Arena
+AI-generated capture-the-flag challenges with difficulty scaled to your tier. Earn XP and badges for every solve.
+
+### 📊 Analytics Dashboard
+Track your learning journey visually:
+- **Activity heatmap** — 12-week GitHub-style contribution graph
+- **Domain radar chart** — see your strengths across web, network, crypto, reverse engineering
+- **SM-2 stats** — total reviews, average ease factor, average interval
+- **Progress rings** — roadmap completion at a glance
+
+### 🔥 Streak & XP System
+Daily streak tracking with same-day double-count prevention. Five tiers with XP gates:
+
+```
+🥚 Egg (0) → 🐣 Hatchling (100) → 💻 Script Kiddie (500) → 🖥️ Hacker (2000) → 🔥 Burn (5000)
+```
+
+### 📱 PWA — Installable App
+Vaathi works offline and can be installed on your phone or desktop. Add to home screen and get review reminders as push notifications when topics are due.
+
+---
 
 ## Architecture
 
 ```
-Student brings LLM API key (Groq/OpenRouter/OpenAI/Together/Ollama)
-         │
-         ▼
-    ┌─────────────┐
-    │   VAATHI     │  ← The wrapper
-    │  (Next.js)   │
-    └──────┬──────┘
-           │
-    ┌──────┴──────────────────────────────┐
-    │                                     │
-    ▼                                     ▼
-Phase 1: Skill Assessment          Phase 2: Guided Learning
-─────────────────────────         ──────────────────────
-• AI asks nerdy questions         • AI explains concepts
-• Student explains in own words   • Micro-tasks (code analysis,
-• AI evaluates depth                command challenges, decode,
-• Generates personalized            scenario response, log analysis)
-  roadmap based on gaps           • MCQ quizzes
-                                   • Guru AI chat (ask anything)
-    ┌──────┴──────────────────────────────┐
-    │                                     │
-    ▼                                     ▼
-Phase 3: Practice                Phase 4: Spaced Repetition
-─────────────────────────         ──────────────────────
-• CTF Arena (AI-generated)        • SM-2 algorithm schedules reviews
-• Dynamic labs via Guru           • Quiz score adjusts next interval
-• XP, levels, badges              • Dashboard shows topics due
-                                   • Streak tracking (daily activity)
+┌─────────────────────────────────────────────────────────────────┐
+│                        VAATHI (Next.js SPA)                     │
+│                                                                  │
+│  Student's LLM API key → stored in DB, proxied by every route   │
+│  Never exposed to the browser after onboarding                  │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+  ┌──────────┐   ┌──────────┐  ┌──────────────┐
+  │  Phase 1 │   │  Phase 2 │  │   Phase 3    │
+  │Assessment│   │ Learning │  │   Practice   │
+  │          │   │          │  │              │
+  │AI asks   │   │Explain + │  │ CTF Arena    │
+  │questions │   │Quiz +    │  │ Dynamic Labs │
+  │Evaluates │   │Microtasks│  │ XP / Badges  │
+  │Roadmap ↓ │   │SM-2 ↓    │  │              │
+  └──────────┘   └──────────┘  └──────────────┘
+                       │
+                  ┌────▼────┐
+                  │Phase 4  │
+                  │Spaced   │
+                  │Repetition│
+                  │SM-2 algo│
+                  │Reviews  │
+                  │Push     │
+                  │Notifs   │
+                  └─────────┘
+
+Database: Turso (libSQL) in production · SQLite locally
+LLM: Any OpenAI-compatible provider (student's own key)
 ```
+
+---
 
 ## Cost Breakdown
 
 | Component | Cost | Provider |
-|---|---|---|
-| LLM API | **FREE** | Student's own Groq/OpenRouter key |
-| Hosting | **FREE** | Vercel Hobby |
-| Database | **FREE** | Turso Starter |
+|:--|:--|:--|
+| LLM API calls | **FREE** | Student's own Groq / OpenRouter key |
+| App hosting | **FREE** | Vercel Hobby |
+| Database | **FREE** | Turso Starter (9 GB) |
+| Push notifications | **FREE** | Web Push (VAPID) |
 | **Total** | **$0** | — |
 
-## Getting Started
+---
 
-### Option A: Deploy Your Own Instance (Recommended)
+## Supported LLM Providers
+
+| Provider | Free? | Best For | Get Key |
+|:--|:--|:--|:--|
+| **Groq** | ✅ Free tier | Speed — Llama 3.3 70B in <1s | [console.groq.com](https://console.groq.com) |
+| **OpenRouter** | ✅ Free models | Variety — Claude, GPT-4o, Gemini | [openrouter.ai](https://openrouter.ai) |
+| **Together AI** | ✅ Trial credits | Open-source models | [together.ai](https://together.ai) |
+| OpenAI | ❌ Paid | GPT-4o quality | [platform.openai.com](https://platform.openai.com) |
+| **Ollama** | ✅ Local | Air-gapped / private use | `ollama pull llama3` |
+| Custom | Varies | Any OpenAI-compatible endpoint | Your own URL |
+
+> **Recommendation:** Start with [Groq](https://console.groq.com) — instant signup, no credit card, fast inference.
+
+---
+
+## 🚀 One-Command Deploy (3 minutes)
 
 ```bash
 git clone https://github.com/bb1nfosec/vaathi.git
@@ -100,143 +175,186 @@ npm install
 bash deploy.sh
 ```
 
-The script handles everything. Just follow the prompts.
+The script automatically:
+1. Checks prerequisites (Node.js 18+, npm, git)
+2. Installs Turso CLI + Vercel CLI if needed
+3. Signs you into Turso (browser-based — no passwords typed)
+4. Creates a free Turso database and runs the schema
+5. Deploys to Vercel with all environment variables set
+6. Prints your live URL
 
-### Option B: Local Development
+> **Requirements:** Node.js 18+, npm, git, GitHub account, Turso account (free, created during setup)
+
+---
+
+## Local Development
 
 ```bash
-# Clone
+# 1. Clone
 git clone https://github.com/bb1nfosec/vaathi.git
 cd vaathi
 
-# Install dependencies
+# 2. Install
 npm install
 
-# Setup database (local SQLite)
+# 3. Environment
+cp .env.example .env
+# Edit .env — set DATABASE_URL=file:./db/dev.db (already the default)
+
+# 4. Database
 npx prisma db push
 
-# Start dev server
+# 5. Start
 npm run dev
 ```
 
-Open http://localhost:3000
+Open [http://localhost:3000](http://localhost:3000)
 
-### Manual Vercel Deployment
+### Useful Commands
 
-If you prefer doing it manually instead of using `deploy.sh`:
+```bash
+npm run dev          # Dev server with hot reload
+npm run build        # Production build
+npm run lint         # ESLint
+npm run db:push      # Push schema to DB
+npm run db:generate  # Regenerate Prisma client after schema changes
+npm run db:reset     # Wipe all data (destructive)
+```
 
-1. **Create Turso database:**
-   ```bash
-   npm install -g turso
-   turso auth login
-   turso db create vaathi
-   turso db show vaathi --url          # Copy this URL
-   turso auth api-tokens create vaathi # Copy this token
-   ```
+---
 
-2. **Push schema:**
-   ```bash
-   TURSO_AUTH_TOKEN=your-token DATABASE_URL="libsql://vaathi-your-org.turso.io" npx prisma db push
-   ```
+## Manual Vercel + Turso Setup
 
-3. **Deploy to Vercel:**
-   - Go to [vercel.com](https://vercel.com), import your repo
-   - Add environment variables:
-     - `DATABASE_URL` = your Turso URL
-     - `TURSO_AUTH_TOKEN` = your Turso token
-   - Deploy!
+If you prefer step-by-step over `deploy.sh`:
 
-## Features
+**Step 1 — Create Turso database**
+```bash
+npm install -g turso
+turso auth login
+turso db create vaathi
+turso db show vaathi --url           # copy this
+turso auth api-tokens create vaathi  # copy this
+```
 
-### 🧠 Dynamic Skill Assessment
-- AI asks nerdy cybersecurity questions conversationally
-- Student explains in their own words (not multiple choice)
-- AI evaluates depth of understanding across 6 domains
-- Generates a personalized learning roadmap ordered by priority
+**Step 2 — Push schema**
+```bash
+TURSO_AUTH_TOKEN=your-token DATABASE_URL="libsql://vaathi-your-org.turso.io" npx prisma db push
+```
 
-### 🔁 SM-2 Spaced Repetition
-- Every completed topic gets a review schedule based on the **SM-2 algorithm**
-- Quiz score at completion sets the initial interval (perfect score → longer gap)
-- Dashboard shows a **"Reviews Due"** count with one-click access
-- Roadmap highlights overdue topics with an amber **REVIEW** badge
-- Review mode opens the quiz immediately (active recall first) and reschedules based on performance
-- Ease factor adjusts per topic — topics you struggle with come back sooner
+**Step 3 — Deploy to Vercel**
+- Import your fork at [vercel.com/new](https://vercel.com/new)
+- Add these environment variables:
 
-### 🔥 Daily Streak Tracking
-- Streak increments once per calendar day when you complete or review a topic
-- `streakLastDate` prevents same-day double-counting across multiple sessions
-- Missed day resets streak to 1
+| Variable | Value |
+|:--|:--|
+| `DATABASE_URL` | `libsql://vaathi-your-org.turso.io` |
+| `TURSO_AUTH_TOKEN` | your Turso token |
+| `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | `https://your-app.vercel.app` |
+| `GITHUB_CLIENT_ID` | *(optional)* GitHub OAuth App client ID |
+| `GITHUB_CLIENT_SECRET` | *(optional)* GitHub OAuth App secret |
+| `VAPID_PUBLIC_KEY` | *(optional)* `npx web-push generate-vapid-keys` |
+| `VAPID_PRIVATE_KEY` | *(optional)* from same command |
+| `VAPID_EMAIL` | *(optional)* your contact email |
 
-### ⚡ Micro Tasks (No VMs needed!)
-- **Code Analysis** — Find the vulnerability in a snippet
-- **Command Challenge** — Explain what this nmap/tcpdump command does
-- **Decode/Encode** — Decode Base64, Hex, ROT13 to find flags
-- **Scenario Response** — You see this security alert, what do you do?
-- **Log Analysis** — Find the attack in this log excerpt
-- **Concept Explain** — Teach this topic to a beginner
+> Only `DATABASE_URL` and `TURSO_AUTH_TOKEN` are required. Everything else enables optional features.
 
-Each task: 2-5 minutes. AI generates AND evaluates your answer.
+**Step 4 — Deploy** and Vaathi is live.
 
-### 🧑‍💻 Guru AI Chat
-- Free-form cybersecurity chat with streaming responses
-- Generates labs and CTF challenges on demand
-- Adapts difficulty to your tier
-- Teaches in your preferred language
-- Uses Indian cybersecurity context (CERT-In, UPI frauds, UIDAI)
+---
 
-### 🗺️ Personalized Learning Roadmap
-- Generated from assessment results
-- Topics ordered by priority (fundamentals first)
-- Learn → Practice Tasks → Quiz flow per topic
-- Completed topics show next review date
-- Due-for-review topics surfaced at the top of the roadmap
+## Troubleshooting
 
-### 🏆 CTF Arena
-- AI-generated CTF challenges
-- Difficulty scales with your tier
-- Points system with badges
+**"Start Hacking!" button doesn't respond on Vercel**
 
-### 📊 Tier System
-- 🥚 Egg (0 XP) → 🐣 Hatchling (100) → 💻 Script Kiddie (500) → 🖥️ Hacker (2000) → 🔥 Burn (5000)
+Visit `/api/health` on your Vercel URL. It reports which env vars are missing and whether the Turso connection is healthy. The most common cause is an expired Turso auth token — regenerate it at [turso.tech](https://app.turso.tech) and update it in Vercel dashboard → Settings → Environment Variables.
 
-## Supported LLM Providers
+**Schema errors on existing Turso databases**
 
-| Provider | Free? | Get Key |
-|---|---|---|
-| **Groq** | ✅ Free | [console.groq.com](https://console.groq.com) |
-| **OpenRouter** | ✅ Free models | [openrouter.ai](https://openrouter.ai) |
-| **Together AI** | ✅ Trial | [together.ai](https://together.ai) |
-| OpenAI | ❌ Paid | [platform.openai.com](https://platform.openai.com) |
-| Ollama (Local) | ✅ Free | `ollama pull llama3`, no key needed |
-| Custom | Varies | Any OpenAI-compatible endpoint |
+Vaathi automatically runs `ALTER TABLE ADD COLUMN` migrations on every cold start to fill in any columns added after your initial deployment. If you see schema errors, try redeploying to trigger a fresh cold start.
 
-**Recommendation:** Use [Groq](https://console.groq.com) for a free API key — instant signup, no credit card.
+**LLM not responding**
+
+Check your API key in Profile → LLM Settings. Test the key directly with the provider's playground. Ensure the model name matches exactly what the provider lists.
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
-| Frontend | Next.js 16, React 19, TypeScript |
+|:--|:--|
+| Framework | Next.js 16 (App Router, React 19) |
+| Language | TypeScript 5 |
 | Styling | Tailwind CSS 4, shadcn/ui, Framer Motion |
 | State | Zustand |
-| Database | Prisma ORM + SQLite (local) / Turso (deployed) |
-| LLM | Student's own API key (BYOLLM) |
-| Spaced Repetition | SM-2 algorithm (SuperMemo 2) |
-| Deployment | Vercel (free) + Turso (free) |
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch
-3. Build something awesome
-4. Open a PR
-
-Priority areas: new micro-task types, language translations, curriculum suggestions, review UI improvements.
-
-## License
-
-MIT License — free forever, open always.
+| Database | Prisma ORM + SQLite (local) / Turso libSQL (production) |
+| Auth | NextAuth v4 (optional — GitHub & Google OAuth) |
+| LLM | Any OpenAI-compatible provider via BYOLLM |
+| Spaced Repetition | SuperMemo 2 (SM-2) algorithm |
+| PWA | Web Push API, Service Worker, Web App Manifest |
+| Deployment | Vercel + Turso (both free tier) |
 
 ---
 
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── assessment/     # Streaming skill assessment + roadmap generation
+│   │   ├── guru/           # Streaming LLM proxy for chat
+│   │   ├── topic-learn/    # Explain / quiz / microtask / SM-2 complete / review
+│   │   ├── roadmap/        # Load user roadmap with SM-2 fields
+│   │   ├── profile/        # Create / update user (API key never returned in GET)
+│   │   ├── presets/        # Apply a curated learning path
+│   │   ├── analytics/      # Domain stats, activity heatmap, SM-2 metrics
+│   │   ├── ctf/submit/     # Validate flag, award XP / badges
+│   │   ├── labs/complete/  # Record lab completion
+│   │   ├── push/           # VAPID push subscription management
+│   │   ├── cron/reviews/   # Daily reminder cron (Vercel Cron, 9am UTC)
+│   │   ├── auth/           # NextAuth (optional GitHub / Google OAuth)
+│   │   └── health/         # DB connectivity check for diagnostics
+│   └── page.tsx            # Single-page app — all views rendered here
+├── components/vaathi/      # Feature views: dashboard, roadmap, topic-learn, …
+├── store/vaathi-store.ts   # Zustand store — single source of truth
+└── lib/
+    ├── db.ts               # Prisma client + ensureSchema + ALTER TABLE migrations
+    └── presets.ts          # 5 curated learning path definitions
+```
+
+---
+
+## Contributing
+
+Pull requests are welcome. Priority areas:
+
+- **New micro-task types** — more variety in hands-on challenges
+- **Language improvements** — better Tamil/Hindi/Telugu/Malayalam/Kannada prompts
+- **New preset paths** — e.g. Forensics Investigator, Mobile Security
+- **Curriculum suggestions** — better topic ordering and descriptions
+- **UI/UX polish** — animations, mobile responsiveness
+
+```bash
+# Fork → branch → build → PR
+git checkout -b feature/your-feature
+# make your changes
+git push origin feature/your-feature
+# open PR on GitHub
+```
+
+---
+
+## License
+
+MIT — free forever, open always.
+
+---
+
+<div align="center">
+
 **Made with 💚 for India's cybersecurity future.**
+
+*If Vaathi helped you learn something new, leave a ⭐ — it helps others find it.*
+
+</div>
