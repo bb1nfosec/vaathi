@@ -4,12 +4,19 @@ import { useVaathiStore, useXPProgress, TIER_CONFIG } from '@/store/vaathi-store
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { motion } from 'framer-motion'
 import {
   Shield,
@@ -20,14 +27,19 @@ import {
   Terminal,
   Menu,
   X,
+  LogIn,
+  LogOut,
+  BarChart2,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useSession, signIn, signOut } from 'next-auth/react'
 
 const navItems = [
   { id: 'dashboard' as const, label: 'Dashboard', icon: Terminal },
   { id: 'roadmap' as const, label: 'Roadmap', icon: BookOpen },
   { id: 'guru' as const, label: 'Guru Chat', icon: Brain },
   { id: 'arena' as const, label: 'CTF Arena', icon: Trophy },
+  { id: 'analytics' as const, label: 'Analytics', icon: BarChart2 },
   { id: 'profile' as const, label: 'Profile', icon: User },
 ]
 
@@ -36,6 +48,7 @@ export default function Navbar() {
   const { level, xpInLevel, xpForNext, progress } = useXPProgress()
   const [mobileOpen, setMobileOpen] = useState(false)
   const tierConfig = user ? TIER_CONFIG[user.tier] : TIER_CONFIG.egg
+  const { data: session } = useSession()
 
   return (
     <motion.nav
@@ -128,6 +141,48 @@ export default function Navbar() {
                 </AvatarFallback>
               </Avatar>
             </>
+          )}
+
+          {/* Auth section */}
+          {session ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 rounded-full hover:bg-white/5 p-1 transition-colors">
+                  <Avatar className="w-7 h-7 border border-neon/30">
+                    {session.user?.image && <AvatarImage src={session.user.image} alt={session.user?.name || ''} />}
+                    <AvatarFallback className="bg-neon/10 text-neon text-xs">
+                      {session.user?.name?.slice(0, 2).toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden sm:block text-xs text-muted-foreground max-w-[80px] truncate">
+                    {session.user?.name}
+                  </span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-cyber-dark border-cyber-border">
+                <div className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
+                  {session.user?.email}
+                </div>
+                <DropdownMenuSeparator className="bg-cyber-border" />
+                <DropdownMenuItem
+                  onClick={() => signOut()}
+                  className="gap-2 text-sm cursor-pointer text-muted-foreground hover:text-foreground"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => signIn()}
+              className="gap-1.5 text-muted-foreground hover:text-foreground text-xs hidden sm:flex"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              Sign In
+            </Button>
           )}
 
           {/* Mobile menu button */}

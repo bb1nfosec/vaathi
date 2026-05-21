@@ -177,6 +177,34 @@ const TABLE_STATEMENTS = [
     FOREIGN KEY ("roadmapId") REFERENCES "LearningRoadmap"("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "LearningRoadmap_userId_key" ON "LearningRoadmap"("userId")`,
+  `CREATE TABLE IF NOT EXISTS "PushSubscription" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "endpoint" TEXT NOT NULL,
+    "p256dh" TEXT NOT NULL,
+    "auth" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint")`,
+]
+
+// ALTER TABLE ADD COLUMN statements — run after CREATE TABLE to add columns that may
+// be missing in older Turso databases deployed before these columns were introduced.
+// SQLite has no "ADD COLUMN IF NOT EXISTS", so we attempt each and ignore duplicate errors.
+const COLUMN_MIGRATIONS = [
+  `ALTER TABLE "User" ADD COLUMN "llmBaseUrl" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "User" ADD COLUMN "assessmentDone" BOOLEAN NOT NULL DEFAULT 0`,
+  `ALTER TABLE "User" ADD COLUMN "topicProgress" TEXT NOT NULL DEFAULT '{}'`,
+  `ALTER TABLE "User" ADD COLUMN "streakLastDate" DATETIME`,
+  `ALTER TABLE "RoadmapTopic" ADD COLUMN "explanation" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "RoadmapTopic" ADD COLUMN "exercise" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "RoadmapTopic" ADD COLUMN "quizJson" TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE "RoadmapTopic" ADD COLUMN "reviewCount" INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE "RoadmapTopic" ADD COLUMN "reviewInterval" INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE "RoadmapTopic" ADD COLUMN "easeFactor" REAL NOT NULL DEFAULT 2.5`,
+  `ALTER TABLE "RoadmapTopic" ADD COLUMN "lastReviewedAt" DATETIME`,
+  `ALTER TABLE "RoadmapTopic" ADD COLUMN "nextReviewAt" DATETIME`,
 ]
 
 // Track if schema has been ensured (per cold start)
@@ -206,9 +234,24 @@ export async function ensureSchema(): Promise<string | null> {
         for (const sql of TABLE_STATEMENTS) {
           await libsql.execute(sql)
         }
+        // Apply column migrations — ignore "duplicate column" errors for already-existing columns
+        for (const sql of COLUMN_MIGRATIONS) {
+          try {
+            await libsql.execute(sql)
+          } catch {
+            // Column already exists — expected for up-to-date databases
+          }
+        }
       } else {
         for (const sql of TABLE_STATEMENTS) {
           await db.$executeRawUnsafe(sql)
+        }
+        for (const sql of COLUMN_MIGRATIONS) {
+          try {
+            await db.$executeRawUnsafe(sql)
+          } catch {
+            // Column already exists
+          }
         }
       }
       _schemaState.ensured = true

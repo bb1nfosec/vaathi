@@ -14,6 +14,7 @@ import GuruChat from '@/components/vaathi/guru-chat'
 import LabSession from '@/components/vaathi/lab-session'
 import Arena from '@/components/vaathi/arena'
 import Profile from '@/components/vaathi/profile'
+import Analytics from '@/components/vaathi/analytics'
 
 export default function Home() {
   const { currentView, isLoading, initSession } = useVaathiStore()
@@ -22,7 +23,7 @@ export default function Home() {
     initSession()
   }, [initSession])
 
-  const showNavbar = ['dashboard', 'assessment', 'roadmap', 'topic-learn', 'guru', 'lab', 'arena', 'profile'].includes(currentView)
+  const showNavbar = ['dashboard', 'assessment', 'roadmap', 'topic-learn', 'guru', 'lab', 'arena', 'profile', 'analytics'].includes(currentView)
 
   if (isLoading) {
     return (
@@ -53,6 +54,7 @@ export default function Home() {
           {currentView === 'lab' && <LabSession />}
           {currentView === 'arena' && <Arena />}
           {currentView === 'profile' && <Profile />}
+          {currentView === 'analytics' && <Analytics />}
         </motion.div>
       </AnimatePresence>
     </main>

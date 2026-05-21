@@ -15,10 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Eye, EyeOff, ArrowLeft, ArrowRight, Check, Shield, Sparkles } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft, ArrowRight, Check, Sparkles, Brain } from 'lucide-react'
+import { PRESET_PATHS } from '@/lib/presets'
 
 export default function Onboarding() {
-  const { saveProfile, setView } = useVaathiStore()
+  const { saveProfile, setView, applyPreset } = useVaathiStore()
   const [step, setStep] = useState(0)
   const [name, setName] = useState('')
   const [language, setLanguage] = useState('english')
@@ -29,6 +30,7 @@ export default function Onboarding() {
   const [showKey, setShowKey] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [setupError, setSetupError] = useState('')
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
 
   const currentProvider = LLM_PROVIDERS.find((p) => p.id === llmProvider)
   const models = currentProvider?.models || []
@@ -38,12 +40,13 @@ export default function Onboarding() {
     if (step === 1) return true
     if (step === 2) return llmApiKey.trim().length > 0 || llmProvider === 'ollama'
     if (step === 3) return llmModel.trim().length > 0
+    if (step === 4) return true // preset step — can always proceed (preset or AI)
     return true
   }
 
   const handleNext = () => {
     setSetupError('')
-    if (step < 3 && canProceed()) {
+    if (step < 4 && canProceed()) {
       setStep(step + 1)
     }
   }
@@ -68,16 +71,28 @@ export default function Onboarding() {
         llmBaseUrl: llmBaseUrl.trim(),
       })
 
-      setIsSaving(false)
-
       if (id) {
+        // If a preset was selected, apply it
+        if (selectedPreset) {
+          await applyPreset(selectedPreset)
+        }
+        setIsSaving(false)
         setView('dashboard')
       } else {
+        setIsSaving(false)
         setSetupError('No response from server. Check your connection and try again.')
       }
     } catch (err) {
       setIsSaving(false)
-      const msg = err instanceof Error ? err.message : 'Unknown error'
+      const raw = err instanceof Error ? err.message : 'Unknown error'
+      // Translate common server-side errors into actionable guidance
+      const msg = raw.includes('DATABASE_URL')
+        ? 'Database not configured. Check your Vercel environment variables.'
+        : raw.includes('UNAUTHORIZED') || raw.includes('TURSO') || raw.includes('libsql')
+        ? 'Database connection failed. Your Turso token may have expired — regenerate it at turso.tech and update your Vercel env vars.'
+        : raw.includes('Schema error')
+        ? `DB setup failed: ${raw}. Try visiting /api/health to diagnose.`
+        : raw
       setSetupError(msg)
     }
   }
@@ -87,7 +102,14 @@ export default function Onboarding() {
     { title: 'Choose your language', icon: '🌍' },
     { title: 'Set up your LLM', icon: '🤖' },
     { title: 'Pick your model', icon: '⚡' },
+    { title: 'Choose your path', icon: '🛤️' },
   ]
+
+  const difficultyColor = {
+    beginner: '#22c55e',
+    intermediate: '#f59e0b',
+    advanced: '#ef4444',
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 grid-bg">
@@ -113,8 +135,8 @@ export default function Onboarding() {
               >
                 {i < step ? <Check className="w-4 h-4" /> : s.icon}
               </div>
-              {i < 3 && (
-                <div className={`w-8 sm:w-12 h-0.5 rounded-full ${i < step ? 'bg-neon/50' : 'bg-cyber-border'}`} />
+              {i < 4 && (
+                <div className={`w-6 sm:w-8 h-0.5 rounded-full ${i < step ? 'bg-neon/50' : 'bg-cyber-border'}`} />
               )}
             </div>
           ))}
@@ -366,6 +388,111 @@ export default function Onboarding() {
                     </Card>
                   </div>
                 )}
+
+                {/* Step 4: Preset Learning Paths */}
+                {step === 4 && (
+                  <div className="space-y-4">
+                    <div className="text-center mb-4">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: 'spring', delay: 0.2 }}
+                        className="text-5xl mb-3"
+                      >
+                        🛤️
+                      </motion.div>
+                      <p className="text-muted-foreground text-sm">
+                        Pick a structured learning path, or let Guru AI assess your skills and build a personalized roadmap.
+                      </p>
+                    </div>
+
+                    {/* Preset cards */}
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {PRESET_PATHS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          onClick={() => setSelectedPreset(selectedPreset === preset.id ? null : preset.id)}
+                          className={`w-full p-3 rounded-xl border text-left transition-all hover:scale-[1.01] ${
+                            selectedPreset === preset.id
+                              ? 'border-neon bg-neon/10 glow-green'
+                              : 'border-cyber-border bg-white/[0.02] hover:border-white/20'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2">
+                              <span className="text-xl shrink-0">{preset.icon}</span>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`text-sm font-semibold ${selectedPreset === preset.id ? 'text-neon' : ''}`}>
+                                    {preset.name}
+                                  </span>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] px-1.5 py-0"
+                                    style={{
+                                      borderColor: difficultyColor[preset.difficulty],
+                                      color: difficultyColor[preset.difficulty],
+                                    }}
+                                  >
+                                    {preset.difficulty}
+                                  </Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
+                                  {preset.description}
+                                </p>
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  {preset.tags.map((tag) => (
+                                    <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-muted-foreground border border-cyber-border">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-neon/5 text-neon/70 border border-neon/20">
+                                    {preset.topics.length} topics
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            {selectedPreset === preset.id && (
+                              <Check className="w-4 h-4 text-neon shrink-0 mt-1" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* AI Assessment option */}
+                    <button
+                      onClick={() => setSelectedPreset(null)}
+                      className={`w-full p-3 rounded-xl border text-left transition-all hover:scale-[1.01] ${
+                        selectedPreset === null
+                          ? 'border-purple-500/50 bg-purple-500/10'
+                          : 'border-cyber-border bg-white/[0.02] hover:border-white/20'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                          <Brain className="w-4 h-4 text-purple-400" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-semibold ${selectedPreset === null ? 'text-purple-400' : ''}`}>
+                              Let AI Assess Me
+                            </span>
+                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-purple-500/30 text-purple-400">
+                              Personalized
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Guru will ask you technical questions and build a custom roadmap for your skill level.
+                          </p>
+                        </div>
+                        {selectedPreset === null && (
+                          <Check className="w-4 h-4 text-purple-400 shrink-0 ml-auto" />
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                )}
               </motion.div>
             </AnimatePresence>
 
@@ -379,7 +506,7 @@ export default function Onboarding() {
                 <ArrowLeft className="w-4 h-4" />
                 Back
               </Button>
-              {step < 3 ? (
+              {step < 4 ? (
                 <Button
                   onClick={handleNext}
                   disabled={!canProceed()}

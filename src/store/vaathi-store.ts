@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ViewType = 'landing' | 'onboarding' | 'dashboard' | 'assessment' | 'roadmap' | 'topic-learn' | 'guru' | 'lab' | 'arena' | 'profile'
+export type ViewType = 'landing' | 'onboarding' | 'dashboard' | 'assessment' | 'roadmap' | 'topic-learn' | 'guru' | 'lab' | 'arena' | 'profile' | 'analytics'
 export type TierType = 'egg' | 'hatchling' | 'script_kiddie' | 'hacker' | 'burn'
 
 export interface Message {
@@ -68,6 +68,14 @@ export interface TaskEvaluation {
   score: string
   feedback: string
   explanation: string
+}
+
+export interface AnalyticsData {
+  domainStats: Array<{ domain: string; total: number; completed: number; avgEaseFactor: number }>
+  activityDates: string[]
+  smStats: { totalReviews: number; avgEaseFactor: number; avgInterval: number; topicsWithReviews: number }
+  streakInfo: { currentStreak: number; longestStreak: number }
+  overallProgress: { totalTopics: number; completedTopics: number; availableTopics: number; totalXP: number; level: number }
 }
 
 export interface RoadmapTopicData {
@@ -169,6 +177,17 @@ interface VaathiState {
 
   // Refresh user data from DB
   refreshUser: () => Promise<void>
+
+  // Analytics
+  analyticsData: AnalyticsData | null
+  loadAnalytics: () => Promise<void>
+
+  // Push notifications
+  pushEnabled: boolean
+  subscribeToPush: () => Promise<void>
+
+  // Presets
+  applyPreset: (presetId: string) => Promise<void>
 }
 
 export const useVaathiStore = create<VaathiState>((set, get) => ({
@@ -201,6 +220,12 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
   // Review mode
   reviewMode: false,
 
+  // Analytics
+  analyticsData: null,
+
+  // Push
+  pushEnabled: false,
+
   // Micro-tasks
   currentMicroTask: null,
   microTaskLoading: false,
@@ -223,7 +248,21 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
 
   initSession: async () => {
     try {
-      const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('vaathi_userId') : null
+      // Try OAuth session first (NextAuth)
+      let oauthUserId: string | null = null
+      try {
+        const sessionRes = await fetch('/api/auth/session')
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json()
+          if (sessionData?.user?.id) {
+            oauthUserId = `oauth_${sessionData.user.id}`
+          }
+        }
+      } catch {
+        // OAuth not configured, fall through to localStorage
+      }
+
+      const savedUserId = oauthUserId || (typeof window !== 'undefined' ? localStorage.getItem('vaathi_userId') : null)
 
       if (savedUserId) {
         const res = await fetch(`/api/profile?id=${savedUserId}`)
@@ -808,6 +847,66 @@ export const useVaathiStore = create<VaathiState>((set, get) => ({
       }
     } catch {
       return { correct: false, message: 'Failed to submit. Try again.' }
+    }
+  },
+
+  loadAnalytics: async () => {
+    const { userId } = get()
+    if (!userId) return
+    try {
+      const res = await fetch(`/api/analytics?userId=${userId}`)
+      if (res.ok) {
+        const data = await res.json()
+        set({ analyticsData: data })
+      }
+    } catch {
+      // ignore
+    }
+  },
+
+  subscribeToPush: async () => {
+    const { userId } = get()
+    if (!userId || typeof window === 'undefined') return
+    try {
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') return
+
+      const keyRes = await fetch('/api/push')
+      if (!keyRes.ok) return
+      const { publicKey } = await keyRes.json()
+      if (!publicKey) return
+
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: publicKey,
+      })
+
+      await fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, subscription }),
+      })
+      set({ pushEnabled: true })
+    } catch {
+      // ignore — push may not be supported
+    }
+  },
+
+  applyPreset: async (presetId: string) => {
+    const { userId } = get()
+    if (!userId) return
+    try {
+      const res = await fetch('/api/presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, presetId }),
+      })
+      if (res.ok) {
+        await get().loadRoadmap()
+      }
+    } catch {
+      // ignore
     }
   },
 
