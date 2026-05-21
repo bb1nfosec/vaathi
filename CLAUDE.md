@@ -58,13 +58,35 @@ No other env vars are required for local dev.
 |---|---|
 | `POST /api/guru` | Streaming LLM proxy for Guru chat; saves messages to DB |
 | `POST /api/assessment` | Streaming assessment + roadmap generation |
-| `POST /api/topic-learn` | Actions: `start`, `explain`, `quiz`, `microtask`, `evaluate-task`, `complete` |
+| `POST /api/topic-learn` | Actions: `start`, `explain`, `quiz`, `microtask`, `evaluate-task`, `complete`, `review` |
 | `GET/POST /api/profile` | Fetch or create/update user profile (API key never returned) |
-| `GET /api/roadmap` | Load roadmap topics for a user |
+| `GET /api/roadmap` | Load roadmap topics for a user (includes SM-2 fields) |
 | `POST /api/labs/complete` | Record lab completion, award XP/badges |
 | `POST /api/ctf/submit` | Validate CTF flag, award points/badges |
 | `GET /api/progress` | XP/tier calculations |
 | `GET /api/health` | Health check |
+
+**`/api/topic-learn` action reference:**
+
+| Action | Body params | Effect |
+|---|---|---|
+| `start` | — | Sets topic `status → in_progress` |
+| `explain` | — | Returns AI explanation (cached after first call) |
+| `quiz` | — | Returns 3-question MCQ (cached after first call) |
+| `microtask` | — | Generates a fresh hands-on exercise |
+| `evaluate-task` | `taskType`, `taskTitle`, `taskContent`, `expectedAnswer`, `studentAnswer` | AI scores the answer |
+| `complete` | `quizScore?` (SM-2 quality 0–5) | Marks completed, runs SM-2, updates streak, unlocks next topic |
+| `review` | `quality` (0–5) | SM-2 reschedule for an already-completed topic, updates streak |
+
+**SM-2 quality mapping** (quiz score out of 3):
+
+| Correct answers | Quality |
+|---|---|
+| 3/3 | 5 (perfect) |
+| 2/3 | 4 (good) |
+| 1/3 | 2 (fail — interval resets) |
+| 0/3 | 1 (fail — interval resets) |
+| No quiz (plain "Mark Complete") | 3 (neutral default) |
 
 **Database** (`src/lib/db.ts`):
 - Prisma schema (`prisma/schema.prisma`) defines the models; the SQLite provider is a dummy — actual connections are handled by `db.ts`.
@@ -76,6 +98,18 @@ No other env vars are required for local dev.
 **Streaming pattern** — all AI responses use SSE (`text/event-stream`). The store reads chunks with a `ReadableStream` reader and accumulates content into `streamContent`. Guru responses are scanned for embedded lab/CTF JSON (fenced code block or raw `{...}`) and automatically route the user to `lab` or `arena` view.
 
 **User identity** — no auth. The user's `id` (cuid) is persisted in `localStorage` under `vaathi_userId`. On `initSession`, the store fetches the profile by this ID and routes to `dashboard` or `landing`.
+
+**Spaced repetition fields** (on `RoadmapTopic`):
+
+| Field | Default | Purpose |
+|---|---|---|
+| `reviewCount` | 0 | Total SM-2 reviews completed |
+| `reviewInterval` | 1 | Current interval in days |
+| `easeFactor` | 2.5 | SM-2 ease factor (min 1.3) |
+| `lastReviewedAt` | null | Timestamp of last review |
+| `nextReviewAt` | null | When the next review is due |
+
+`User.streakLastDate` stores the date of the last streak increment to prevent same-day double-counting.
 
 ## Key constants (in `vaathi-store.ts`)
 

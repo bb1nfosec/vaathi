@@ -11,7 +11,7 @@
 
 Vaathi is an AI-powered cybersecurity learning platform where **students bring their own LLM API key** (Groq is free!) and Vaathi acts as the intelligent wrapper that orchestrates their entire learning journey.
 
-The AI dynamically assesses their skills, generates a personalized roadmap, teaches concepts, creates hands-on micro-tasks, and evaluates their progress — all in their preferred Indian language.
+The AI dynamically assesses their skills, generates a personalized roadmap, teaches concepts, creates hands-on micro-tasks, evaluates their progress, and schedules **spaced repetition reviews** to lock knowledge into long-term memory — all in their preferred Indian language.
 
 **Total cost for any student: $0 forever.**
 
@@ -44,6 +44,7 @@ That's it. The script automatically:
 | Everything is in English | **6 languages** — Tamil, Hindi, Telugu, Malayalam, Kannada, English |
 | One-size-fits-all content | **AI assessment** → personalized roadmap based on what YOU know |
 | Need VMs for labs | **Micro-tasks** — code analysis, decode challenges, log forensics (no VMs!) |
+| Learned → forgotten | **SM-2 spaced repetition** — scheduled reviews at optimal intervals |
 | No real tutor | **Guru AI** — always available, adapts to your level, remembers you |
 
 ## Architecture
@@ -71,11 +72,12 @@ Phase 1: Skill Assessment          Phase 2: Guided Learning
     ┌──────┴──────────────────────────────┐
     │                                     │
     ▼                                     ▼
-Phase 3: Practice                   Phase 4: Re-assess
+Phase 3: Practice                Phase 4: Spaced Repetition
 ─────────────────────────         ──────────────────────
-• CTF Arena (AI-generated)        • Periodic check-ins
-• Dynamic labs via Guru           • Updated roadmap
-• XP, levels, badges              • Track growth
+• CTF Arena (AI-generated)        • SM-2 algorithm schedules reviews
+• Dynamic labs via Guru           • Quiz score adjusts next interval
+• XP, levels, badges              • Dashboard shows topics due
+                                   • Streak tracking (daily activity)
 ```
 
 ## Cost Breakdown
@@ -150,7 +152,20 @@ If you prefer doing it manually instead of using `deploy.sh`:
 - AI asks nerdy cybersecurity questions conversationally
 - Student explains in their own words (not multiple choice)
 - AI evaluates depth of understanding across 6 domains
-- Generates personalized learning roadmap
+- Generates a personalized learning roadmap ordered by priority
+
+### 🔁 SM-2 Spaced Repetition
+- Every completed topic gets a review schedule based on the **SM-2 algorithm**
+- Quiz score at completion sets the initial interval (perfect score → longer gap)
+- Dashboard shows a **"Reviews Due"** count with one-click access
+- Roadmap highlights overdue topics with an amber **REVIEW** badge
+- Review mode opens the quiz immediately (active recall first) and reschedules based on performance
+- Ease factor adjusts per topic — topics you struggle with come back sooner
+
+### 🔥 Daily Streak Tracking
+- Streak increments once per calendar day when you complete or review a topic
+- `streakLastDate` prevents same-day double-counting across multiple sessions
+- Missed day resets streak to 1
 
 ### ⚡ Micro Tasks (No VMs needed!)
 - **Code Analysis** — Find the vulnerability in a snippet
@@ -173,7 +188,8 @@ Each task: 2-5 minutes. AI generates AND evaluates your answer.
 - Generated from assessment results
 - Topics ordered by priority (fundamentals first)
 - Learn → Practice Tasks → Quiz flow per topic
-- Progress tracking with XP, levels, badges
+- Completed topics show next review date
+- Due-for-review topics surfaced at the top of the roadmap
 
 ### 🏆 CTF Arena
 - AI-generated CTF challenges
@@ -205,6 +221,7 @@ Each task: 2-5 minutes. AI generates AND evaluates your answer.
 | State | Zustand |
 | Database | Prisma ORM + SQLite (local) / Turso (deployed) |
 | LLM | Student's own API key (BYOLLM) |
+| Spaced Repetition | SM-2 algorithm (SuperMemo 2) |
 | Deployment | Vercel (free) + Turso (free) |
 
 ## Contributing
@@ -214,7 +231,7 @@ Each task: 2-5 minutes. AI generates AND evaluates your answer.
 3. Build something awesome
 4. Open a PR
 
-Priority areas: new micro-task types, language translations, curriculum suggestions.
+Priority areas: new micro-task types, language translations, curriculum suggestions, review UI improvements.
 
 ## License
 
